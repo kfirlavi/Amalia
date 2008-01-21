@@ -60,13 +60,15 @@
 /* beta = 1/2 */
 #define TCP_COMPOUND_BETA           1U
 #define TCP_COMPOUND_GAMMA          30
-#define TCP_COMPOUND_ZETA           1
+#define TCP_COMPOUND_GAMMA_LOW      5
+#define TCP_COMPOUND_GAMMA_HIGH     30
+#define LAMBDA_SHIFT                1
 
 /* TCP compound variables */
 struct compound {
 	u32 beg_snd_nxt;	/* right edge during last RTT */
 	u32 beg_snd_una;	/* left edge  during last RTT */
-	u32 beg_snd_cwnd;	/* saves the size of the cwnd */
+	u32 beg_cwnd;		/* saves the size of cwnd only (gamma tuning) */
 	u8 doing_vegas_now;	/* if true, do vegas for this RTT */
 	u16 cntRTT;		/* # of RTTs measured within last RTT */
 	u32 minRTT;		/* min of RTTs measured within last RTT (in usec) */
@@ -74,6 +76,8 @@ struct compound {
 
 	u32 cwnd;
 	u32 dwnd;
+	s32 diff_reno;		/* used for gamma-tuning.  -1 = invalid */
+	u16 gamma;		/* target packets to store in the network */
 };
 
 /* There are several situations when we must "re-start" Vegas:
@@ -105,6 +109,7 @@ static inline void vegas_enable(struct sock *sk)
 
 	vegas->cntRTT = 0;
 	vegas->minRTT = 0x7fffffff;
+	vegas->diff_reno = -1;		/* set to invalid */
 }
 
 /* Stop taking Vegas samples for now. */
@@ -127,9 +132,38 @@ static void tcp_compound_init(struct sock *sk)
 	vegas->dwnd = 0;
 	vegas->cwnd = tp->snd_cwnd;
 
+	vegas->gamma = TCP_COMPOUND_GAMMA;
+	vegas->diff_reno = -1;		/* set to invalid */
+
 #ifdef TRANSPORT_DEBUG
 	printk ("Starting CTCP: sk %p cwnd %d\n", sk, tp->snd_cwnd);
+	// printk (Web100 duration or bytes sent);
 #endif
+}
+
+/* Same as tcp_reno_ssthresh, but also do gamma tuning */
+u32 tcp_compound_ssthresh(struct sock *sk)
+{
+	struct compound *vegas = inet_csk_ca(sk);
+	const struct tcp_sock *tp = tcp_sk(sk);
+
+	/* If  diff_reno  valid, do gamma tuning */
+	if (vegas->diff_reno != -1) {
+		/* g_sample = diff_reno * 3/4 */
+		u32 g_sample = (vegas->diff_reno * 3) >> (V_PARAM_SHIFT+2);
+		vegas->gamma += (g_sample - vegas->gamma) >> LAMBDA_SHIFT;
+
+		/* clip */
+		if (vegas->gamma > TCP_COMPOUND_GAMMA_HIGH)
+		    vegas->gamma = TCP_COMPOUND_GAMMA_HIGH;
+		else if (vegas->gamma < TCP_COMPOUND_GAMMA_LOW)
+			 vegas->gamma = TCP_COMPOUND_GAMMA_LOW;
+		/* don't use one  diff_reno  m'ment for multiple adjustments */
+		vegas->diff_reno = -1;
+	}
+
+	/* halve window on loss */
+	return max(tp->snd_cwnd >> 1U, 2U);
 }
 
 /* Do RTT sampling needed for Vegas.
@@ -245,7 +279,13 @@ static u32 qroot(u64 a)
 static void tcp_compound_cwnd_event(struct sock *sk, enum tcp_ca_event event)
 {
 	if (event == CA_EVENT_CWND_RESTART || event == CA_EVENT_TX_START)
+	{
+		struct compound *ctcp = inet_csk_ca(sk);
+		int tmp = ctcp->baseRTT;	/* CTCP spec keeps baseRTT */
 		tcp_compound_init(sk);
+		//if (event == CA_EVENT_CWND_RESTART)
+		ctcp->baseRTT = tmp;
+	}
 }
 
 static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
@@ -296,15 +336,11 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 	 * because delayed ACKs can cover more than one segment, so they
 	 * don't line up nicely with the boundaries of RTTs.
 	 *
-	 * Another unfortunate fact of life is that delayed ACKs delay the
-	 * advance of the left edge of our send window, so that the number
-	 * of bytes we send in an RTT is often less than our cwnd will allow.
-	 * So we keep track of our cwnd separately, in v_beg_snd_cwnd.
 	 */
 
 	if (after(ack, vegas->beg_snd_nxt)) {
 		/* Do the Vegas once-per-RTT cwnd adjustment. */
-		u32 old_wnd, old_snd_cwnd;
+		u32 old_wnd, old_cwnd;
 
 		/* Here old_wnd is essentially the window of data that was
 		 * sent during the previous RTT, and has all
@@ -317,14 +353,14 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 
 		old_wnd = (vegas->beg_snd_nxt - vegas->beg_snd_una) /
 		    tp->mss_cache;
-		old_snd_cwnd = vegas->beg_snd_cwnd;
+		old_cwnd = vegas->beg_cwnd;
 
 		/* Save the extent of the current window so we can use this
 		 * at the end of the next RTT.
 		 */
 		vegas->beg_snd_una = vegas->beg_snd_nxt;
 		vegas->beg_snd_nxt = tp->snd_nxt;
-		vegas->beg_snd_cwnd = tp->snd_cwnd;
+		vegas->beg_cwnd = vegas->cwnd;
 
 		/* We do the Vegas calculations only if we got enough RTT
 		 * samples that we can be reasonably sure that we got
@@ -384,9 +420,15 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 			WEB100_VAR_SET(tp, CurAI, diff);
 #endif
 
+			/* Analogously find "diff_reno" for gamma tuning */
+			/* This time, use   old_cwnd   instead of  old_wnd */
+			target_cwnd = ((old_cwnd* brtt) << V_PARAM_SHIFT) / rtt;
+			vegas->diff_reno =
+				(old_cwnd << V_PARAM_SHIFT) - target_cwnd;
+
 			dwnd = vegas->dwnd;
 
-			if (diff < (TCP_COMPOUND_GAMMA << V_PARAM_SHIFT)) {
+			if (diff < (vegas->gamma << V_PARAM_SHIFT)) {
 				u64 v;
 				u32 x;
 
@@ -429,8 +471,8 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 
 	tp->snd_cwnd = vegas->cwnd + vegas->dwnd;
 #ifdef LACHLAN_WEB100
-	/* Hacky re-use of AI and MD for loss- and delay-windows */
-	WEB100_VAR_SET(tp, CurMD, vegas->dwnd);
+	/* Hacky re-use of AI and MD */
+	WEB100_VAR_SET(tp, CurMD, vegas->gamma);
 #endif
 }
 
@@ -455,7 +497,7 @@ static void tcp_compound_get_info(struct sock *sk, u32 ext, struct sk_buff *skb)
 
 static struct tcp_congestion_ops tcp_compound = {
 	.init		= tcp_compound_init,
-	.ssthresh	= tcp_reno_ssthresh,
+	.ssthresh	= tcp_compound_ssthresh,
 	.cong_avoid	= tcp_compound_cong_avoid,
 	.pkts_acked	= tcp_compound_pkts_acked,
 	.set_state	= tcp_compound_state,
