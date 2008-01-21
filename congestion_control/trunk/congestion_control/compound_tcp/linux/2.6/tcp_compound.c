@@ -1,44 +1,19 @@
 /*
- *   TCP Compound based on TCP Vegas
+ *   TCP Compound.  Implementation based on TCP Vegas
  *
  *   further details can be found here:
  *      ftp://ftp.research.microsoft.com/pub/tr/TR-2005-86.pdf
+ *   earlier release, requested to go in 2.6.18:
+ *	http://lwn.net/Articles/185074/
  *
- *
- *
- * TCP Vegas congestion control
- *
- * This is based on the congestion detection/avoidance scheme described in
- *    Lawrence S. Brakmo and Larry L. Peterson.
- *    "TCP Vegas: End to end congestion avoidance on a global internet."
- *    IEEE Journal on Selected Areas in Communication, 13(8):1465--1480,
- *    October 1995. Available from:
- *	ftp://ftp.cs.arizona.edu/xkernel/Papers/jsac.ps
- *
- * See http://www.cs.arizona.edu/xkernel/ for their implementation.
- * The main aspects that distinguish this implementation from the
- * Arizona Vegas implementation are:
- *   o We do not change the loss detection or recovery mechanisms of
- *     Linux in any way. Linux already recovers from losses quite well,
- *     using fine-grained timers, NewReno, and FACK.
- *   o To avoid the performance penalty imposed by increasing cwnd
- *     only every-other RTT during slow start, we increase during
- *     every RTT during slow start, just like Reno.
- *   o Largely to allow continuous cwnd growth during slow start,
- *     we use the rate at which ACKs come back as the "actual"
- *     rate, rather than the rate at which data is sent.
- *   o To speed convergence to the right rate, we set the cwnd
- *     to achieve the right ("actual") rate when we exit slow start.
- *   o To filter out the noise caused by delayed ACKs, we use the
- *     minimum RTT sample observed during the last RTT to calculate
- *     the actual rate.
- *   o When the sender re-starts from idle, it waits until it has
- *     received ACKs for an entire flight of new data before making
- *     a cwnd adjustment decision. The original Vegas implementation
- *     assumed senders never went idle.
+ * Jan 2008:  Module parameters added -- LA
+ * Dec 2007:  Gamma tuning added -- LA
+ * Nov 2007:  Disable reset of baseRTT in  tcp_compound_cwnd_event() -- LA
+ * Nov 2007:  Port to 2.6.23 -- Lachlan Andrew
+ * May 2006:  Original release -- Angelo P. Castellani, Stephen Hemminger
  */
 
-#define TRANSPORT_DEBUG 1
+#define TRANSPORT_DEBUG 0
 
 //#include <linux/config.h>
 #include <linux/mm.h>
@@ -48,39 +23,49 @@
 
 #include <net/tcp.h>
 
-/* TODO:  Put into .h file? */
+/* Default values of the CTCP variables */
 
-/* Default values of the Vegas variables, in fixed-point representation
- * with V_PARAM_SHIFT bits to the right of the binary point.
- */
-#define V_PARAM_SHIFT 1
+/* Fixed point, used by  diff_reno, diff and target_cwnd */
+#define C_PARAM_SHIFT 1
 
-/* alpha = 1/8 */
-#define TCP_COMPOUND_ALPHA          3U
-/* beta = 1/2 */
-#define TCP_COMPOUND_BETA           1U
-#define TCP_COMPOUND_GAMMA          30
-#define TCP_COMPOUND_GAMMA_LOW      5
-#define TCP_COMPOUND_GAMMA_HIGH     30
-#define LAMBDA_SHIFT                1
+static unsigned int LOG_ALPHA __read_mostly = 3U;	/* alpha = 1/8 */
+static unsigned int ETA       __read_mostly = 1U;
+static int GAMMA              __read_mostly = 30;
+static int GAMMA_LOW          __read_mostly = 5;
+static int GAMMA_HIGH         __read_mostly = 30;
+static int LAMBDA_SHIFT       __read_mostly = 1;	/* lambda = 1/2 */
+
+module_param(    LOG_ALPHA, int, 0644);
+MODULE_PARM_DESC(LOG_ALPHA, "Factor of WND^0.75 by which DWND increases");
+module_param(    ETA,  int, 0644);
+MODULE_PARM_DESC(ETA,  "Factor of estimated queue by which DWND decreases");
+module_param(    GAMMA, int, 0644);
+MODULE_PARM_DESC(GAMMA, "Delay threshold (pks)");
+module_param(    GAMMA_LOW, int, 0644);
+MODULE_PARM_DESC(GAMMA_LOW, "GAMMA tuning: min value possible");
+module_param(    GAMMA_HIGH, int, 0644);
+MODULE_PARM_DESC(GAMMA_LOW, "GAMMA tuning: max value possible");
+module_param(    LAMBDA_SHIFT, int, 0644);
+MODULE_PARM_DESC(LAMBDA_SHIFT, "GAMMA tuning: log_2(Forgetting factor)");
 
 /* TCP compound variables */
 struct compound {
 	u32 beg_snd_nxt;	/* right edge during last RTT */
-	u32 beg_snd_una;	/* left edge  during last RTT */
+	u32 beg_snd_una;	/* left  edge during last RTT */
 	u32 beg_cwnd;		/* saves the size of cwnd only (gamma tuning) */
-	u8 doing_vegas_now;	/* if true, do vegas for this RTT */
+	u8  doing_ctcp_now;	/* if true, do ctcp for this RTT */
 	u16 cntRTT;		/* # of RTTs measured within last RTT */
 	u32 minRTT;		/* min of RTTs measured within last RTT (in usec) */
-	u32 baseRTT;		/* the min of all Vegas RTT measurements seen (in usec) */
+	u32 baseRTT;		/* the min of all CTCP RTT measurements seen (in usec) */
 
 	u32 cwnd;
 	u32 dwnd;
-	s32 diff_reno;		/* used for gamma-tuning.  -1 = invalid */
+	s32 diff_reno;		/* used for gamma-tuning. << C_PARAM_SHIFT */
+							/* -1 = invalid */
 	u16 gamma;		/* target packets to store in the network */
 };
 
-/* There are several situations when we must "re-start" Vegas:
+/* There are several situations when we must "re-start" CTCP:
  *
  *  o when a connection is established
  *  o after an RTO
@@ -88,7 +73,7 @@ struct compound {
  *  o when we send a packet and there is no outstanding
  *    unacknowledged data (restarting an idle connection)
  *
- * In these circumstances we cannot do a Vegas calculation at the
+ * In these circumstances we cannot do a CTCP calculation at the
  * end of the first RTT, because any calculation we do is using
  * stale info -- both the saved cwnd and congestion feedback are
  * stale.
@@ -96,77 +81,75 @@ struct compound {
  * Instead we must wait until the completion of an RTT during
  * which we actually receive ACKs.
  */
-static inline void vegas_enable(struct sock *sk)
+static inline void ctcp_enable(struct sock *sk)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
-	struct compound *vegas = inet_csk_ca(sk);
+	struct compound *ctcp = inet_csk_ca(sk);
 
-	/* Begin taking Vegas samples next time we send something. */
-	vegas->doing_vegas_now = 1;
+	/* Begin taking CTCP samples next time we send something. */
+	ctcp->doing_ctcp_now = 1;
 
 	/* Set the beginning of the next send window. */
-	vegas->beg_snd_nxt = tp->snd_nxt;
+	ctcp->beg_snd_nxt = tp->snd_nxt;
 
-	vegas->cntRTT = 0;
-	vegas->minRTT = 0x7fffffff;
-	vegas->diff_reno = -1;		/* set to invalid */
+	ctcp->cntRTT = 0;
+	ctcp->minRTT = 0x7fffffff;
+	ctcp->diff_reno = -1;		/* set to invalid */
 }
 
-/* Stop taking Vegas samples for now. */
-static inline void vegas_disable(struct sock *sk)
+/* Stop taking CTCP samples for now. */
+static inline void ctcp_disable(struct sock *sk)
 {
-	struct compound *vegas = inet_csk_ca(sk);
+	struct compound *ctcp = inet_csk_ca(sk);
 
-	vegas->doing_vegas_now = 0;
+	ctcp->doing_ctcp_now = 0;
 }
 
 /* Initialize a connection.  Not called when restarted after timeout etc */
 static void tcp_compound_init(struct sock *sk)
 {
-	struct compound *vegas = inet_csk_ca(sk);
+	struct compound *ctcp = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
-	vegas->baseRTT = 0x7fffffff;
-	vegas_enable(sk);
+	ctcp->baseRTT = 0x7fffffff;
+	ctcp_enable(sk);
 
-	vegas->dwnd = 0;
-	vegas->cwnd = tp->snd_cwnd;
+	ctcp->dwnd = 0;
+	ctcp->cwnd = tp->snd_cwnd;
 
-	vegas->gamma = TCP_COMPOUND_GAMMA;
-	vegas->diff_reno = -1;		/* set to invalid */
+	ctcp->gamma = GAMMA;
+	ctcp->diff_reno = -1;		/* set to invalid */
 
-#ifdef TRANSPORT_DEBUG
-	printk ("Starting CTCP: sk %p cwnd %d\n", sk, tp->snd_cwnd);
-	// printk (Web100 duration or bytes sent);
-#endif
 }
 
-/* Same as tcp_reno_ssthresh, but also do gamma tuning */
+/* slow start threshold < cwnd/2 like tcp_reno_ssthresh, */
+/* but also do gamma tuning */
+/* Should it also reduce  dwnd  as specified in CTCP draft?? */
 u32 tcp_compound_ssthresh(struct sock *sk)
 {
-	struct compound *vegas = inet_csk_ca(sk);
+	struct compound *ctcp = inet_csk_ca(sk);
 	const struct tcp_sock *tp = tcp_sk(sk);
 
 	/* If  diff_reno  valid, do gamma tuning */
-	if (vegas->diff_reno != -1) {
+	if (ctcp->diff_reno != -1) {
 		/* g_sample = diff_reno * 3/4 */
-		u32 g_sample = (vegas->diff_reno * 3) >> (V_PARAM_SHIFT+2);
-		vegas->gamma += (g_sample - vegas->gamma) >> LAMBDA_SHIFT;
+		u32 g_sample = (ctcp->diff_reno * 3) >> (C_PARAM_SHIFT+2);
+		ctcp->gamma += (g_sample - ctcp->gamma) >> LAMBDA_SHIFT;
 
 		/* clip */
-		if (vegas->gamma > TCP_COMPOUND_GAMMA_HIGH)
-		    vegas->gamma = TCP_COMPOUND_GAMMA_HIGH;
-		else if (vegas->gamma < TCP_COMPOUND_GAMMA_LOW)
-			 vegas->gamma = TCP_COMPOUND_GAMMA_LOW;
+		if (ctcp->gamma > GAMMA_HIGH)
+		    ctcp->gamma = GAMMA_HIGH;
+		else if (ctcp->gamma < GAMMA_LOW)
+			 ctcp->gamma = GAMMA_LOW;
 		/* don't use one  diff_reno  m'ment for multiple adjustments */
-		vegas->diff_reno = -1;
+		ctcp->diff_reno = -1;
 	}
 
 	/* halve window on loss */
 	return max(tp->snd_cwnd >> 1U, 2U);
 }
 
-/* Do RTT sampling needed for Vegas.
+/* Do RTT sampling needed for CTCP.
  * Basically we:
  *   o min-filter RTT samples from within an RTT to get the current
  *     propagation delay + queuing delay (we are min-filtering to try to
@@ -178,7 +161,7 @@ u32 tcp_compound_ssthresh(struct sock *sk)
  */
 static void tcp_compound_pkts_acked(struct sock *sk, u32 num_acked, s32 rtt_us)
 {
-	struct compound *vegas = inet_csk_ca(sk);
+	struct compound *ctcp = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	u32 vrtt;
 
@@ -190,11 +173,11 @@ static void tcp_compound_pkts_acked(struct sock *sk, u32 num_acked, s32 rtt_us)
 	vrtt = rtt_us + 1;
 
 	/* Filter to find propagation delay: */
-	if (vrtt < vegas->baseRTT)
+	if (vrtt < ctcp->baseRTT)
 	{
-		vegas->baseRTT = vrtt;
+		ctcp->baseRTT = vrtt;
 #ifdef LACHLAN_WEB100
-		WEB100_VAR_SET(tp, BaseRTT, vegas->baseRTT);
+		WEB100_VAR_SET(tp, BaseRTT, ctcp->baseRTT);
 #endif
 	}	
 
@@ -202,17 +185,17 @@ static void tcp_compound_pkts_acked(struct sock *sk, u32 num_acked, s32 rtt_us)
 	 * the current prop. delay + queuing delay:
 	 */
 
-	vegas->minRTT = min(vegas->minRTT, vrtt);
-	vegas->cntRTT++;
+	ctcp->minRTT = min(ctcp->minRTT, vrtt);
+	ctcp->cntRTT++;
 }
 
 static void tcp_compound_state(struct sock *sk, u8 ca_state)
 {
 
 	if (ca_state == TCP_CA_Open)
-		vegas_enable(sk);
+		ctcp_enable(sk);
 	else
-		vegas_disable(sk);
+		ctcp_disable(sk);
 }
 
 
@@ -269,11 +252,11 @@ static u32 qroot(u64 a)
 
 /*
  * If the connection is idle and we are restarting,
- * then we don't want to do any Vegas calculations
+ * then we don't want to do any CTCP calculations
  * until we get fresh RTT samples.  So when we
- * restart, we reset our Vegas state to a clean
+ * restart, we reset our CTCP state to a clean
  * slate. After we get acks for this flight of
- * packets, _then_ we can make Vegas calculations
+ * packets, _then_ we can make CTCP calculations
  * again.
  */
 static void tcp_compound_cwnd_event(struct sock *sk, enum tcp_ca_event event)
@@ -292,22 +275,30 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 				    u32 in_flight, int flag)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	struct compound *vegas = inet_csk_ca(sk);
+	struct compound *ctcp = inet_csk_ca(sk);
 	u8 inc = 0;
 
-	if (vegas->cwnd + vegas->dwnd > tp->snd_cwnd) {
-		if (vegas->cwnd > tp->snd_cwnd || vegas->dwnd > tp->snd_cwnd) {
-			vegas->cwnd = tp->snd_cwnd;
-			vegas->dwnd = 0;
+	/* Update  ctcp->cwnd  to reflect external decreases in  snd_cwnd */
+	/* Does this also reflect the "beta" change on loss?? -- LA 16-Jan-08 */
+	if (ctcp->cwnd + ctcp->dwnd > tp->snd_cwnd) {
+		if (ctcp->cwnd > tp->snd_cwnd || ctcp->dwnd > tp->snd_cwnd) {
+			ctcp->cwnd = tp->snd_cwnd;
+			ctcp->dwnd = 0;
 		} else
-			vegas->cwnd = tp->snd_cwnd - vegas->dwnd;
+			ctcp->cwnd = tp->snd_cwnd - ctcp->dwnd;
 
 	}
 
 	if (!tcp_is_cwnd_limited(sk, in_flight))
 		return;
 
-	if (vegas->cwnd <= tp->snd_ssthresh)
+	/* Why does this not call  tcp_slow_start(tp)  and/or consider  abc? */
+	/* Is it because it increases  ctcp->cwnd  instead of  tp->snd_cwnd? */
+	/* Perhaps:
+	   in slow start, call slow_start()  and set  ctcp->cwnd=snd_cwnd - dwdn
+	   otherwise, do  abc  stuff to  ctcp->cwnd
+	   */
+	if (ctcp->cwnd <= tp->snd_ssthresh)
 		inc = 1;
 	else if (tp->snd_cwnd_cnt < tp->snd_cwnd)
 		tp->snd_cwnd_cnt++;
@@ -318,7 +309,7 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 	}
 
 	if (inc && tp->snd_cwnd < tp->snd_cwnd_clamp)
-		vegas->cwnd++;
+		ctcp->cwnd++;
 
 	/* The key players are v_beg_snd_una and v_beg_snd_nxt.
 	 *
@@ -338,8 +329,8 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 	 *
 	 */
 
-	if (after(ack, vegas->beg_snd_nxt)) {
-		/* Do the Vegas once-per-RTT cwnd adjustment. */
+	if (after(ack, ctcp->beg_snd_nxt)) {
+		/* Do the CTCP once-per-RTT cwnd adjustment. */
 		u32 old_wnd, old_cwnd;
 
 		/* Here old_wnd is essentially the window of data that was
@@ -351,18 +342,18 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 		if (!tp->mss_cache)
 			return;
 
-		old_wnd = (vegas->beg_snd_nxt - vegas->beg_snd_una) /
+		old_wnd = (ctcp->beg_snd_nxt - ctcp->beg_snd_una) /
 		    tp->mss_cache;
-		old_cwnd = vegas->beg_cwnd;
+		old_cwnd = ctcp->beg_cwnd;
 
 		/* Save the extent of the current window so we can use this
 		 * at the end of the next RTT.
 		 */
-		vegas->beg_snd_una = vegas->beg_snd_nxt;
-		vegas->beg_snd_nxt = tp->snd_nxt;
-		vegas->beg_cwnd = vegas->cwnd;
+		ctcp->beg_snd_una = ctcp->beg_snd_nxt;
+		ctcp->beg_snd_nxt = tp->snd_nxt;
+		ctcp->beg_cwnd = ctcp->cwnd;
 
-		/* We do the Vegas calculations only if we got enough RTT
+		/* We do the CTCP calculations only if we got enough RTT
 		 * samples that we can be reasonably sure that we got
 		 * at least one RTT sample that wasn't from a delayed ACK.
 		 * If we only had 2 samples total,
@@ -371,24 +362,24 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 		 * If  we have 3 samples, we should be OK.
 		 */
 
-		if (vegas->cntRTT > 2) {
-			u32 rtt, target_cwnd, diff;
-			u32 brtt, dwnd;
+		if (ctcp->cntRTT > 2) {
+			u32 rtt, brtt, dwnd;
+			u32 target_cwnd, diff; 	/* shifted by C_PARAM_SHIFT */
 
-			/* We have enough RTT samples, so, using the Vegas
+			/* We have enough RTT samples, so, using the CTCP
 			 * algorithm, we determine if we should increase or
 			 * decrease cwnd, and by how much.
 			 */
 
-			/* Pluck out the RTT we are using for the Vegas
+			/* Pluck out the RTT we are using for the CTCP
 			 * calculations. This is the min RTT seen during the
 			 * last RTT. Taking the min filters out the effects
 			 * of delayed ACKs, at the cost of noticing congestion
 			 * a bit later.
 			 */
-			rtt = vegas->minRTT;
+			rtt = ctcp->minRTT;
 #ifdef LACHLAN_WEB100
-			WEB100_VAR_SET(tp, EstQ, rtt - vegas->baseRTT);
+			WEB100_VAR_SET(tp, EstQ, rtt - ctcp->baseRTT);
 #endif
 
 			/* Calculate the cwnd we should have, if we weren't
@@ -397,24 +388,24 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 			 * This is:
 			 *     (actual rate in segments) * baseRTT
 			 * We keep it as a fixed point number with
-			 * V_PARAM_SHIFT bits to the right of the binary point.
+			 * C_PARAM_SHIFT bits to the right of the binary point.
 			 */
 			if (!rtt)
 				return;
 
-			brtt = vegas->baseRTT;
-			target_cwnd = ((old_wnd * brtt) << V_PARAM_SHIFT) / rtt;
+			brtt = ctcp->baseRTT;
+			target_cwnd = ((old_wnd * brtt) << C_PARAM_SHIFT) / rtt;
 
 			/* Calculate the difference between the window we had,
 			 * and the window we would like to have. This quantity
 			 * is the "Diff" from the Arizona Vegas papers.
 			 *
 			 * Again, this is a fixed point number with
-			 * V_PARAM_SHIFT bits to the right of the binary
+			 * C_PARAM_SHIFT bits to the right of the binary
 			 * point.
 			 */
 
-			diff = (old_wnd << V_PARAM_SHIFT) - target_cwnd;
+			diff = (old_wnd << C_PARAM_SHIFT) - target_cwnd;
 #ifdef LACHLAN_WEB100
 			/* Hacky re-use of AI and MD */
 			WEB100_VAR_SET(tp, CurAI, diff);
@@ -422,13 +413,13 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 
 			/* Analogously find "diff_reno" for gamma tuning */
 			/* This time, use   old_cwnd   instead of  old_wnd */
-			target_cwnd = ((old_cwnd* brtt) << V_PARAM_SHIFT) / rtt;
-			vegas->diff_reno =
-				(old_cwnd << V_PARAM_SHIFT) - target_cwnd;
+			target_cwnd = ((old_cwnd* brtt) << C_PARAM_SHIFT) / rtt;
+			ctcp->diff_reno =
+				(old_cwnd << C_PARAM_SHIFT) - target_cwnd;
 
-			dwnd = vegas->dwnd;
+			dwnd = ctcp->dwnd;
 
-			if (diff < (vegas->gamma << V_PARAM_SHIFT)) {
+			if (diff < (ctcp->gamma << C_PARAM_SHIFT)) {
 				u64 v;
 				u32 x;
 
@@ -443,61 +434,60 @@ static void tcp_compound_cong_avoid(struct sock *sk, u32 ack,
 				 * use 0.75.
 				 */
 				v = old_wnd;
-				x = qroot(v * v * v) >> TCP_COMPOUND_ALPHA;
+				x = qroot(v * v * v) >> LOG_ALPHA;
 				if (x > 1)
 					dwnd = x - 1;
 				else
 					dwnd = 0;
 
-				dwnd += vegas->dwnd;
+				dwnd += ctcp->dwnd;
 
-			} else if ((dwnd << V_PARAM_SHIFT) <
-				   (diff * TCP_COMPOUND_BETA))
+			/* Reduce dwnd by  eta * "window diff" */
+			/* Recall here diff = "window diff" << C_PARAM_SHIFT */
+			} else if ((dwnd << C_PARAM_SHIFT) < (diff * ETA))
 				dwnd = 0;
 			else
 				dwnd =
-				    ((dwnd << V_PARAM_SHIFT) -
-				     (diff *
-				      TCP_COMPOUND_BETA)) >> V_PARAM_SHIFT;
+				    ((dwnd << C_PARAM_SHIFT) - (diff * ETA))
+					     >> C_PARAM_SHIFT;
 
-			vegas->dwnd = dwnd;
+			ctcp->dwnd = dwnd;
 
 		}
 
 		/* Wipe the slate clean for the next RTT. */
-		vegas->cntRTT = 0;
-		vegas->minRTT = 0x7fffffff;
+		ctcp->cntRTT = 0;
+		ctcp->minRTT = 0x7fffffff;
 	}
 
-	tp->snd_cwnd = vegas->cwnd + vegas->dwnd;
+	tp->snd_cwnd = ctcp->cwnd + ctcp->dwnd;
 #ifdef LACHLAN_WEB100
 	/* Hacky re-use of AI and MD */
-	WEB100_VAR_SET(tp, CurMD, vegas->gamma);
+	WEB100_VAR_SET(tp, CurMD, ctcp->gamma);
 #endif
 }
 
 /* Extract info for Tcp socket info provided via netlink. */
-/* TODO: Change for Compound TCP */
 static void tcp_compound_get_info(struct sock *sk, u32 ext, struct sk_buff *skb)
 {
 	const struct compound *ca = inet_csk_ca(sk);
 	if (ext & (1 << (INET_DIAG_VEGASINFO - 1))) {
-		struct tcpvegas_info *info;
+		struct tcpvegas_info info = {
+			.tcpv_enabled = ca->doing_ctcp_now,
+			.tcpv_rttcnt = ca->cntRTT,
+			.tcpv_rtt = ca->baseRTT,
+			.tcpv_minrtt = ca->minRTT,
+		};
 
-		info = RTA_DATA(__RTA_PUT(skb, INET_DIAG_VEGASINFO,
-					  sizeof(*info)));
-
-		info->tcpv_enabled = ca->doing_vegas_now;
-		info->tcpv_rttcnt = ca->cntRTT;
-		info->tcpv_rtt = ca->baseRTT;
-		info->tcpv_minrtt = ca->minRTT;
-	rtattr_failure:;
+		nla_put(skb, INET_DIAG_VEGASINFO, sizeof(info), &info);
 	}
 }
 
 static struct tcp_congestion_ops tcp_compound = {
+	.flags		= TCP_CONG_RTT_STAMP,
 	.init		= tcp_compound_init,
 	.ssthresh	= tcp_compound_ssthresh,
+	.min_cwnd       = tcp_reno_ssthresh,	/* don't reduce dwnd here */
 	.cong_avoid	= tcp_compound_cong_avoid,
 	.pkts_acked	= tcp_compound_pkts_acked,
 	.set_state	= tcp_compound_state,
