@@ -1,0 +1,32 @@
+#!/bin/bash
+if [[ -z $1 ]]
+then 
+	PROGNAME=`basename $0`
+	echo "Use: $PROGNAME <kernel source dir>"
+	exit 
+fi
+TFTP_DIR=/var/lib/tftpboot/ltsp/i386/kfir/compound
+KERNEL_DIR=$1
+BZIMAGE=arch/i386/boot/bzImage
+KERNEL_CONFIG="$KERNEL_DIR/.config"
+VERSION=`grep VERSION $KERNEL_DIR/Makefile | head -n 1 | cut -f 3 -d ' '`
+PATCHLEVEL=`grep PATCHLEVEL $KERNEL_DIR/Makefile | head -n 1 | cut -f 3 -d ' '`
+SUBLEVEL=`grep SUBLEVEL $KERNEL_DIR/Makefile | head -n 1 | cut -f 3 -d ' '`
+EXTRAVERSION=`grep EXTRAVERSION $KERNEL_DIR/Makefile | head -n 1 | cut -f 3 -d ' '`
+KERNEL_VERSION="${VERSION}.${PATCHLEVEL}.${SUBLEVEL}"
+if [[ $EXTRAVERSION ]]
+then
+	KERNEL_VERSION="${KERNEL_VERSION}${EXTRAVERSION}"
+fi
+
+LOCALVERSION=`grep "LOCALVERSION=" $KERNEL_DIR/ | cut -f 2 -d '"'`
+
+if [[ $LOCALVERSION ]]
+then
+	KERNEL_VERSION="${KERNEL_VERSION}${LOCALVERSION}"
+fi
+
+KERNEL_NAME="vmlinux-${KERNEL_VERSION}"
+CONFIG_NAME="config-${KERNEL_VERSION}"
+cp $KERNEL_DIR/$BZIMAGE $TFTP_DIR/$KERNEL_NAME
+cp $KERNEL_DIR/$BZIMAGE $TFTP_DIR/$CONFIG_NAME
