@@ -6,27 +6,73 @@ then
 	exit 
 fi
 TFTP_DIR=/var/lib/tftpboot/ltsp/i386/kfir/compound
+# This is the root filesystem that the pxeboot clients have as thier root nfs
+CLIENT_ROOT_FS=/opt/ltsp/i386 
 KERNEL_DIR=$1
 BZIMAGE=arch/i386/boot/bzImage
+KERNEL_PREFIX="vmlinux-"
+CONFIG_PREFIX="config-"
 KERNEL_CONFIG="$KERNEL_DIR/.config"
-VERSION=`grep VERSION $KERNEL_DIR/Makefile | head -n 1 | cut -f 3 -d ' '`
-PATCHLEVEL=`grep PATCHLEVEL $KERNEL_DIR/Makefile | head -n 1 | cut -f 3 -d ' '`
-SUBLEVEL=`grep SUBLEVEL $KERNEL_DIR/Makefile | head -n 1 | cut -f 3 -d ' '`
-EXTRAVERSION=`grep EXTRAVERSION $KERNEL_DIR/Makefile | head -n 1 | cut -f 3 -d ' '`
-KERNEL_VERSION="${VERSION}.${PATCHLEVEL}.${SUBLEVEL}"
-if [[ $EXTRAVERSION ]]
-then
-	KERNEL_VERSION="${KERNEL_VERSION}${EXTRAVERSION}"
-fi
 
-LOCALVERSION=`grep "LOCALVERSION=" $KERNEL_DIR/ | cut -f 2 -d '"'`
 
-if [[ $LOCALVERSION ]]
-then
-	KERNEL_VERSION="${KERNEL_VERSION}${LOCALVERSION}"
-fi
+get_kernel_local_version()
+{
+	grep "LOCALVERSION=" $KERNEL_CONFIG | cut -f 2 -d '"'
+}
 
-KERNEL_NAME="vmlinux-${KERNEL_VERSION}"
-CONFIG_NAME="config-${KERNEL_VERSION}"
-cp $KERNEL_DIR/$BZIMAGE $TFTP_DIR/$KERNEL_NAME
-cp $KERNEL_DIR/$BZIMAGE $TFTP_DIR/$CONFIG_NAME
+get_kernel_param_from_makefile()
+{
+	grep $1 $KERNEL_DIR/Makefile | head -n 1 | cut -f 3 -d ' '
+}
+
+get_kernel_version()
+{
+	version=`get_kernel_param_from_makefile "VERSION"`
+	patchlevel=`get_kernel_param_from_makefile "PATCHLEVEL"`
+	sublevel=`get_kernel_param_from_makefile "SUBLEVEL"`
+	extraversion=`get_kernel_param_from_makefile "EXTRAVERSION"`
+	kernel_version="${version}.${patchlevel}.${sublevel}"
+
+	# if extra version exist we'll concatenate it to the kernel version string
+	if [[ $extraversion ]]
+	then
+		kernel_version="${kernel_version}${extraversion}"
+	fi
+
+	# Include the user added local version from the kernel config
+	localversion=`get_kernel_local_version`
+
+	if [[ $localversion ]]
+	then
+		kernel_version="${kernel_version}${localversion}"
+	fi
+	
+	#return 
+	echo $kernel_version
+}
+
+# gets kernel version
+copy_kernel_to_tftp_dir()
+{
+	kver=$1
+	kernel_filename="${KERNEL_PREFIX}${kver}"
+	config_filename="${CONFIG_PREFIX}${kver}"
+	cp -v $KERNEL_DIR/$BZIMAGE $TFTP_DIR/$kernel_filename
+	cp -v $KERNEL_CONFIG $TFTP_DIR/$config_filename
+}
+
+install_modules_to_client_root_nfs()
+{
+	cd $KERNEL_DIR &&
+	make modules_install INSTALL_MOD_PATH=$CLIENT_ROOT_FS &&
+	cd -
+}
+
+main()
+{
+	kver=`get_kernel_version`
+	copy_kernel_to_tftp_dir $kver
+	install_modules_to_client_root_nfs
+}
+
+main
