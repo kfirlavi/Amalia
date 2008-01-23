@@ -12,6 +12,7 @@ KERNEL_DIR=$1
 BZIMAGE=arch/i386/boot/bzImage
 KERNEL_PREFIX="vmlinux-"
 CONFIG_PREFIX="config-"
+INITRD_PREFIX="initrd.img-"
 KERNEL_CONFIG="$KERNEL_DIR/.config"
 
 
@@ -68,10 +69,18 @@ install_modules_to_client_root_nfs()
 	cd -
 }
 
+# gets kernel version
+create_initrd()
+{
+	sudo chroot $CLIENT_ROOT_FS update-initramfs -k $1 -c
+	mv -v $CLIENT_ROOT_FS/boot/${INITRD_PREFIX}${1} $TFTP_DIR
+}
+
 main()
 {
 	kver=`get_kernel_version`
 	copy_kernel_to_tftp_dir $kver
+	create_initrd $kver
 	install_modules_to_client_root_nfs
 }
 
