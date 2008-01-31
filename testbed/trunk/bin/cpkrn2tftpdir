@@ -5,7 +5,10 @@ then
 	echo "Use: $PROGNAME <kernel source dir>"
 	exit 
 fi
-TFTP_DIR=/var/lib/tftpboot/ltsp/i386/kfir/compound
+TFTP_DIR=/var/lib/tftpboot/ltsp/i386
+TFTP_KERNEL_RELATIVE_DIR=kfir/compound
+TFTP_KERNEL_DIR=$TFTP_KERNEL_DIR/$TFTP_KERNEL_RELATIVE_DIR
+PXE_CFG_DIR=$TFTP_DIR/pxelinux.cfg
 # This is the root filesystem that the pxeboot clients have as thier root nfs
 CLIENT_ROOT_FS=/opt/ltsp/i386 
 KERNEL_DIR=$1
@@ -58,8 +61,8 @@ copy_kernel_to_tftp_dir()
 	kver=$1
 	kernel_filename="${KERNEL_PREFIX}${kver}"
 	config_filename="${CONFIG_PREFIX}${kver}"
-	cp -v $KERNEL_DIR/$BZIMAGE $TFTP_DIR/$kernel_filename
-	cp -v $KERNEL_CONFIG $TFTP_DIR/$config_filename
+	cp -v $KERNEL_DIR/$BZIMAGE $TFTP_KERNEL_DIR/$kernel_filename
+	cp -v $KERNEL_CONFIG $TFTP_KERNEL_DIR/$config_filename
 }
 
 install_modules_to_client_root_nfs()
@@ -73,7 +76,14 @@ install_modules_to_client_root_nfs()
 create_initrd()
 {
 	sudo chroot $CLIENT_ROOT_FS update-initramfs -k $1 -c
-	mv -v $CLIENT_ROOT_FS/boot/${INITRD_PREFIX}${1} $TFTP_DIR
+	mv -v $CLIENT_ROOT_FS/boot/${INITRD_PREFIX}${1} $TFTP_KERNEL_DIR
+}
+
+write_pxe_default_file()
+{
+	kernel="${TFTP_KERNEL_RELATIVE_DIR}/${KERNEL_PREFIX}${1}"
+	initrd="initrd=${TFTP_KERNEL_RELATIVE_DIR}/${INITRD_PREFIX}${1}"
+	echo "DEFAULT $kernel ro vga=792 $initrd" > $PXE_CFG_DIR/default
 }
 
 main()
@@ -82,6 +92,7 @@ main()
 	copy_kernel_to_tftp_dir $kver
 	create_initrd $kver
 	install_modules_to_client_root_nfs
+	write_pxe_default_file $kver
 }
 
 main
