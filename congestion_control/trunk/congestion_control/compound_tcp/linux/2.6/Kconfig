@@ -394,6 +394,14 @@ config INET_XFRM_MODE_BEET
 
 	  If unsure, say Y.
 
+config INET_LRO
+	tristate "Large Receive Offload (ipv4/tcp)"
+
+	---help---
+	  Support for Large Receive Offload (ipv4/tcp).
+
+	  If unsure, say Y.
+
 config INET_DIAG
 	tristate "INET: socket monitoring interface"
 	default y
@@ -559,7 +567,7 @@ config TCP_CONG_ILLINOIS
 	depends on EXPERIMENTAL
 	default n
 	---help---
-	TCP-Illinois is a sender-side modificatio of TCP Reno for
+	TCP-Illinois is a sender-side modification of TCP Reno for
 	high speed long delay links. It uses round-trip-time to
 	adjust the alpha and beta parameters to achieve a higher average
 	throughput and maintain fairness.
@@ -589,6 +597,9 @@ choice
 	config DEFAULT_WESTWOOD
 		bool "Westwood" if TCP_CONG_WESTWOOD=y
 
+	config DEFAULT_COMPOUND
+		bool "Compound" if TCP_CONG_COMPOUND=y
+
 	config DEFAULT_RENO
 		bool "Reno"
 
@@ -609,7 +620,8 @@ config DEFAULT_TCP_CONG
 	default "vegas" if DEFAULT_VEGAS
 	default "westwood" if DEFAULT_WESTWOOD
 	default "reno" if DEFAULT_RENO
-	default "cubic"
+	default "compound" if DEFAULT_COMPOUND
+	default "compound"
 
 config TCP_MD5SIG
 	bool "TCP: MD5 Signature Option support (RFC2385) (EXPERIMENTAL)"
