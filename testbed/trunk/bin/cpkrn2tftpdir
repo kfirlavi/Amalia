@@ -7,7 +7,7 @@ then
 fi
 TFTP_DIR=/var/lib/tftpboot/ltsp/i386
 TFTP_KERNEL_RELATIVE_DIR=kfir/compound
-TFTP_KERNEL_DIR=$TFTP_KERNEL_DIR/$TFTP_KERNEL_RELATIVE_DIR
+TFTP_KERNEL_DIR=$TFTP_DIR/$TFTP_KERNEL_RELATIVE_DIR
 PXE_CFG_DIR=$TFTP_DIR/pxelinux.cfg
 # This is the root filesystem that the pxeboot clients have as thier root nfs
 CLIENT_ROOT_FS=/opt/ltsp/i386 
@@ -83,7 +83,7 @@ write_pxe_default_file()
 {
 	kernel="${TFTP_KERNEL_RELATIVE_DIR}/${KERNEL_PREFIX}${1}"
 	initrd="initrd=${TFTP_KERNEL_RELATIVE_DIR}/${INITRD_PREFIX}${1}"
-	echo "DEFAULT $kernel ro vga=792 $initrd" > $PXE_CFG_DIR/default
+	echo "DEFAULT $kernel ro $initrd" > $PXE_CFG_DIR/default
 }
 
 main()
