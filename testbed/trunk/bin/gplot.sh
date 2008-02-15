@@ -11,11 +11,19 @@ PLOTNUM=`echo "$QUERY_STRING" | sed -n 's/^.*plot=\([^&]*\).*$/\1/p' | sed "s/%2
 TITLE=`echo "$QUERY_STRING" | sed -n 's/^.*title=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
 XHI=`echo "$QUERY_STRING" | sed -n 's/^.*xhi=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
 STYLE=`echo "$QUERY_STRING" | sed -n 's/^.*style=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
+SIZE=`echo "$QUERY_STRING" | sed -n 's/^.*size=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
 if [[ $FORMAT = "eps" ]]; then
   FORMAT="postscript eps enhanced color"
   MIME="Application/PostScript"
-else
+fi
+if [[ $FORMAT = "" ]]; then
   FORMAT="png"
+  case $SIZE in
+    normal) FORMAT="png size 1200,800";;
+    big) FORMAT="png size 2400,1600";;
+    huge) FORMAT="png size 3200,2400";;
+    *) FORMAT="png";;
+  esac
   MIME="image/png"
 fi
 
