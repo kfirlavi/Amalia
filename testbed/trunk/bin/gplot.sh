@@ -31,8 +31,7 @@ echo Content-type: $MIME
 echo ""
 
 #first get list of unique destination ip and ports
-flow_ids=`grep -v -i "#" $f | cut -d ' ' -f 2 | sort | uniq `
-
+flow_ids=`grep -v -i "#" $f | grep -v ":22" | cut -d ' ' -f 2 | sort | uniq `
 #now sort tcp_probe output for gnuplot
 temp=`mktemp -t probe.XXXXXX` || echo "can't create temp file"
 tput=`mktemp -t tput.XXXXX` || echo "can't create temp file"
