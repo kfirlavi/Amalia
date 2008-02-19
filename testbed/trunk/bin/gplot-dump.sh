@@ -12,12 +12,17 @@ PLOTNUM=`echo "$QUERY_STRING" | sed -n 's/^.*plot=\([^&]*\).*$/\1/p' | sed "s/%2
 TITLE=`echo "$QUERY_STRING" | sed -n 's/^.*title=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
 XHI=`echo "$QUERY_STRING" | sed -n 's/^.*xhi=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
 YHI=`echo "$QUERY_STRING" | sed -n 's/^.*yhi=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
+STYLE=`echo "$QUERY_STRING" | sed -n 's/^.*style=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
 if [[ $FORMAT = "eps" ]]; then
   FORMAT="postscript eps enhanced color"
   MIME="Application/PostScript"
 else
   FORMAT="png"
   MIME="image/png"
+fi
+
+if [[ $STYLE = "" ]]; then
+  STYLE="points"
 fi
 
 echo Content-type: $MIME 
@@ -36,8 +41,8 @@ j=0
 for i in $flow_ids; do
    grep -i $i $f >> $temp
    echo -e '\n\n' >>$temp
-   #plot="$plot $comma '$temp' index $j u (\$1-$starttime):(\$3/1448) w p title 'flow $j cwnd', '$itemp' index $j u 2:4 w p axes x1y2 title 'flow $j tput'"
-   plot="$plot $comma '$temp' index $j u (\$1-$starttime):(\$3/1448) w p title 'flow $j cwnd' "
+   #plot="$plot $comma '$temp' index $j u (\$1-$starttime):(\$3/1448) with $STYLE title 'flow $j cwnd', '$itemp' index $j u 2:4 with $STYLE axes x1y2 title 'flow $j tput'"
+   plot="$plot $comma '$temp' index $j u (\$1-$starttime):(\$3/1448) with $STYLE title 'flow $j cwnd' "
    comma=","
    ((j++))
 done
@@ -50,7 +55,7 @@ rttfile=`echo $tempf | sed -e 's/\.dump/-0\.ping/'`
 if [  -e $rttfile ]; then
         awk '/time=/ {split($0,pieces,"time="); split(pieces[2],pieces," "); print pieces[1]} ' $rttfile >$rtt
 	#sed -e '1d' | cut -f 7 -d ' ' | cut -f 2 -d '=' >$rtt
-        plotping="plot \"$rtt\" u (\$0*1):1 w p title \"ping time\" "
+        plotping="plot \"$rtt\" u (\$0*1):1 with $STYLE title \"ping time\" "
 else
         plotping=""
 fi
@@ -70,7 +75,7 @@ j=0
 for i in $flow_ids; do
    grep -i $i $iperffile >> $itemp
    echo -e '\n\n' >>$itemp
-   iplot="$iplot $comma '$itemp' index $j u 2:4 w p title 'flow $j tput'"
+   iplot="$iplot $comma '$itemp' index $j u 2:4 with $STYLE title 'flow $j tput'"
    comma=","
    ((j++))
 done
