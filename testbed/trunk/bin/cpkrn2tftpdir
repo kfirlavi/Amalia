@@ -89,9 +89,9 @@ write_pxe_default_file()
 main()
 {
 	kver=`get_kernel_version`
-	copy_kernel_to_tftp_dir $kver
-	create_initrd $kver
 	install_modules_to_client_root_nfs
+	create_initrd $kver
+	copy_kernel_to_tftp_dir $kver
 	write_pxe_default_file $kver
 }
 
