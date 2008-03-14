@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash -x
 
 # plot cwnd data reconstructed from tcpdump 
 tempf=$PATH_TRANSLATED
@@ -90,7 +90,7 @@ units=`cut -d ' ' -f 5 $iperf | head -n 1`
 comma=''; iplot='plot '; 
 j=0
 for i in $flow_ids; do
-   grep -i $i $iperffile >> $itemp
+   grep -i $i $iperf >> $itemp
    echo -e '\n\n' >>$itemp
    iplot="$iplot $comma '$itemp' index $j u 2:4 with $STYLE title 'flow $j tput'"
    comma=","
@@ -111,18 +111,18 @@ title3=$meantputs
 plott="plot [][0:1] 2"
 MSTART="set size 2,2; set origin 0,0; set multiplot"
 MEND="unset multiplot"
-if [[ $PLOTNUM -eq 1 ]]; then
+if [[ "$PLOTNUM" -eq 1 ]]; then
    iplot=""
    plotping=""
    plott=""
-   MSTART=""
-   MEND=""
-elif [[ $PLOTNUM -eq 2 ]]; then
+   #MSTART=""
+   #MEND=""
+elif [[ "$PLOTNUM" -eq 2 ]]; then
    plot=""
    plotping=""
    plott=""
-   MSTART=""
-   MEND=""
+   #MSTART=""
+   #MEND=""
 fi
 
 if [[ $TITLE = "off" ]]; then
