@@ -7,13 +7,17 @@ f=`mktemp -t f.XXXXXX` || echo "can't create temp file"
 zcat $tempf > $f || cp $tempf $f
 
 FORMAT=`echo "$QUERY_STRING" | sed -n 's/^.*format=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-STYLE=`echo "$QUERY_STRING" | sed -n 's/^.*style=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
+STYLE2=`echo "$QUERY_STRING" | sed -n 's/^.*style2=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
 PLOTNUM=`echo "$QUERY_STRING" | sed -n 's/^.*plot=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
 TITLE=`echo "$QUERY_STRING" | sed -n 's/^.*title=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
 XHI=`echo "$QUERY_STRING" | sed -n 's/^.*xhi=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
 YHI=`echo "$QUERY_STRING" | sed -n 's/^.*yhi=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
+XLO=`echo "$QUERY_STRING" | sed -n 's/^.*xlo=\([^&]*\).*$/\1/p' | sed "s/%20//g"`
+YLO=`echo "$QUERY_STRING" | sed -n 's/^.*ylo=\([^&]*\).*$/\1/p' | sed "s/%20//g"`
 STYLE=`echo "$QUERY_STRING" | sed -n 's/^.*style=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
 SIZE=`echo "$QUERY_STRING" | sed -n 's/^.*size=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
+NOTPUT=`echo "$QUERY_STRING" | sed -n 's/^.*tput=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
+
 if [[ $FORMAT = "eps" ]]; then
   FORMAT="postscript eps enhanced color"
   MIME="Application/PostScript"
@@ -44,13 +48,18 @@ flow_ids=` grep -v -i "#" $f | cut -d ' ' -f 2 | sort | uniq `
 #now sort output for gnuplot
 itemp=`mktemp -t i.XXXXXX` || echo "can't create temp file"
 temp=`mktemp -t probe.XXXXXX` || echo "can't create temp file"
+tput=`mktemp -t tput.XXXXX` || echo "can't create temp file"  
 comma=''; plot='plot '; 
 j=0
 for i in $flow_ids; do
    grep -i $i $f >> $temp
    echo -e '\n\n' >>$temp
    #plot="$plot $comma '$temp' index $j u (\$1-$starttime):(\$3/1448) with $STYLE title 'flow $j cwnd', '$itemp' index $j u 2:4 with $STYLE axes x1y2 title 'flow $j tput'"
-   plot="$plot $comma '$temp' index $j u (\$1-$starttime):(\$3/1448) with $STYLE title 'flow $j cwnd' "
+   if [[ $NOTPUT ]]; then
+      plot="$plot $comma '$temp' index $j u (\$1-$starttime):(\$3/1448) with $STYLE title 'flow $j cwnd' "
+   else
+      plot="$plot $comma '$temp' index $j u (\$1-$starttime):(\$3/1448) with $STYLE title 'flow $j cwnd', '$tput' index $j u (\$1-$starttime):2 with $STYLE axes x1y2 title 'flow $j tput' "
+   fi
    comma=","
    ((j++))
 done
@@ -88,6 +97,9 @@ for i in $flow_ids; do
    ((j++))
 done
 
+# get throughput from packet sequence numbers in tcpdump
+awk --non-decimal-data 'BEGIN {t=-1; dt=1; } {if (NF < 3) printf "\n\n"; else {seq=$4; if (t<0 || t>$1) {t=$1; lastseq=seq; print $1, 0}; if ($1-t >= dt) {print $1, (seq-lastseq)*8/1024/1024/($1-t); t=$1; lastseq=seq}; } } '  $temp > $tput
+
 ititle1=`grep -i "#" $iperf | sed -n '1p' | sed -e 's/#//'`
 ititle2=`grep -i "#" $iperf | sed -n '2p' | sed -e 's/#//'`
 
@@ -121,21 +133,27 @@ if [[ $TITLE = "off" ]]; then
 fi
 
 preamble=""
-if [[ $STYLE = "lachlan" ]]; then
+if [[ $STYLE2 = "lachlan" ]]; then
    preamble="set size 0.5,0.35" 
    #preamble="set size 0.5,0.42"
+fi
+
+YAXIS='set y2label "throughput (Mbps)"; set ytics nomirror; set y2range [0:]; set y2tics'
+if [[ $NOTPUT ]]; then
+	YAXIS=""
 fi
 
 gnuplot <<EOF
 set terminal $FORMAT  
 set xlabel "time (s)"
 set ylabel "cwnd (packets)"
-set xrange [0:$XHI]
-set yrange [0:$YHI]
+set xrange [$XLO:$XHI]
+set yrange [$YLO:$YHI]
 #set y2label "throughput (Mbps)"
 #set ytics nomirror
-#set y2range [0:$YHI]
+#set y2range [0:]
 #set y2tics
+$YAXIS
 $MSTART
 set title ""
 
