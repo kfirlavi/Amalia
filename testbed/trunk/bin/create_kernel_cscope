@@ -1,0 +1,28 @@
+#!/bin/bash
+# created with the help of: http://www.fsl.cs.sunysb.edu/~rick/cscope.html
+
+CS_FILES=cscope.files
+
+create_cscope_files()
+{
+	find | grep "\.c$\|\.h$" > $CS_FILES
+}
+
+build_cscope_database()
+{
+	cscope -b
+}
+
+generate_code_completion_database()
+{
+	ctags -L $CS_FILES
+}
+
+main()
+{
+	create_cscope_files
+	build_cscope_database
+	generate_code_completion_database
+}
+
+main
