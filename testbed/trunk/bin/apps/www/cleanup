@@ -1,0 +1,5 @@
+# cleanup
+for C in ${CLIENT[@]}
+do
+	ssh $TESTUSER@$C "killall -q wget" >/dev/null 2>&1
+done

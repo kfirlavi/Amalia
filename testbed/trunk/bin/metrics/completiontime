@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# calculate completion time from tcp_probe log
+# ... col 1 is time when ack's received at server, so completin time may be out by one rtt .
+for f in $@
+do
+    start=`head -n 1 $f | cut -f 1 -d ' '`
+    stop=`tail -n 1 $f | cut -f 1 -d ' '`
+    t=`echo $start $stop | awk '{printf "%0.2f", ($2-$1)}'` 
+    echo -n ","${t}s
+done
+

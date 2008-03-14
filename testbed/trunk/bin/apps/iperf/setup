@@ -1,0 +1,14 @@
+PORT=5001
+OPT="-t 300"
+APP_OUT=()
+if [[ $CONFIGCLIENT = "yes" ]]; then
+for C in ${CLIENTS[@]}
+do
+        temp_out=$NETTEST_RESULT/${C}.iperf
+	APP_OUT=(${APP_OUT[@]} $temp_out)
+
+	ssh root@$C "killall -q iperf >/dev/null 2>&1" 
+	sleep 2
+	ssh root@$C "iperf -s -p $PORT -i 1 -f m -w 30M " > $NETTEST_RESULT/${C}.iperf &
+done
+fi

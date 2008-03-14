@@ -1,0 +1,28 @@
+#!/bin/sh
+
+# calculate mean throughput from tcp_probe log
+# ... col 1 is time, col 6 is seq number.
+
+for f in $@
+do
+    # do a brute force walk through log file counting bytes acked.  
+    # .. this deals with wrapping of sequence numbers, as wrapping means that
+    # simply taking the difference between the first and last seq numbers
+    # does not give the bytes transferred.  is there a smarter way to do this ?
+    awk --non-decimal-data '\
+        BEGIN {ts=-1; te=-1; bytes=0; seq=-1 }  
+	{ 
+	if (ts<0) ts=$1 
+	if (seq<0) seq=$6
+	if ($6 < seq) {
+	   // sequence number has wrapped
+	   seq=$6
+	} else {
+	   bytes=bytes+($6-seq) 
+	}
+	te=$1 
+	seq=$6  
+	}
+	END {if (te>ts) {printf ",%0.2fMbps", bytes*8/1024/1024/(te-ts)} else {printf ",***"} }
+	' $f
+done 

@@ -1,0 +1,48 @@
+#! /bin/bash -f
+#
+# Configure dummynet on the router
+
+function set-delay() {
+   ssh root@$1 \
+   "tc qdisc delete dev eth0 root netem 2>/dev/null; 
+   tc qdisc add dev eth0 root netem delay ${2}ms limit 10000"
+   echo "$1 latency: $2 ms"
+}
+
+# Usage: set-router rtt-ms rate-mb queue-ratio servers
+function set-router() {
+
+	local servers=(`echo $4 | sed -e 's/:/ /g'`)
+	local latency=(`echo $1 | sed -e 's/:/ /g'`)
+	local q=${3}
+	local bw=${2}Mbit/s
+	
+	local queue=`echo ${latency[0]} $bw ${q-2.0} | awk '
+		{
+			bdp = ($1 * $2 * 1000)/8
+			q = bdp * $3
+			printf "%dB\n",q
+		}'`
+
+
+	# fresh dummynet
+	ssh $ROUTERUSER@$ROUTER "\
+		kldstat |grep dummynet &>/dev/null || kldload dummynet; \
+		ipfw -f -q flush; ipfw -f -q pipe flush;  sleep 1;    \
+		ipfw -q add pipe 1 ip from $NET1 to $NET2 in       && \
+		ipfw -q add pipe 2 ip from $NET2 to $NET1 out      && \
+		ipfw pipe 1 config bw $bw queue $queue && \
+		ipfw pipe 2 config bw $bw queue $queue "
+
+	i=0
+	del=''
+	for S in ${servers[@]}
+	do
+	   del=${latency[$i]-$del}
+	   set-delay $S $del 
+	   echo -n "$S latency $del, "
+	   ((i++))
+	done
+
+	echo "router: $bw $queue"
+}

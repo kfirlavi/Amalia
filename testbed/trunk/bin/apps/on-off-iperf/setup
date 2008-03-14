@@ -1,0 +1,7 @@
+PORT=5001
+for C in ${CLIENTS[@]}
+do
+	ssh root@$C "killall -q iperf >/dev/null 2>&1" 
+        ssh root@$C "iperf -s -p $PORT >/dev/null 2>&1" &
+done
+

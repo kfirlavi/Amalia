@@ -1,0 +1,8 @@
+# cleanup
+if [[ $CONFIGCLIENT = "yes" ]]; then
+for C in ${CLIENTS[@]}
+do
+        ssh root@$C "killall -q iperf" >/dev/null 2>&1
+done
+fi
+

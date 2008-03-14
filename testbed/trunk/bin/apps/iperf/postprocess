@@ -1,0 +1,19 @@
+# Make iperf output sensible and plottable
+function reformatiperf()  {
+        rm -f $outfile
+        # find connections
+        grep 'connected with' $infile | awk '{print $2, $4":"$6"->"$9":"$11}' | while read line; do
+           marker=`echo $line | awk '{print $1}'`
+           tag=`echo $line | awk '{print $2}'`  
+	   grep "\[[ ]*[${marker}\]\ *[1-9]" $infile \
+           |sed "s/\[[0-9 ]*\]\ *\([0-9.]*\)-\ *[0-9.]*\ sec\ *\([0-9.]*\)\ *[KM]*[Bb][ytes]*\ *\([0-9.]*\)\ *\([KM]\)*[Bb][its]*\/sec/${tag} \1 \2 \3 \4/"  >>$outfile
+        done
+#	ls -al $infile $outfile
+} 
+
+for F in $1; do
+   infile=$F
+   outfile=${F}.temp
+   reformatiperf 
+   mv $outfile $infile
+done

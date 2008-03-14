@@ -1,0 +1,161 @@
+--- nettest.v0	2007-08-07 10:25:42.000000000 +0100
++++ nettest	2007-08-07 10:41:55.000000000 +0100
+@@ -58,18 +58,40 @@
+ DATE=`date +%d%m%y-%R`
+ OUTFILE=$NETTEST_RESULT/$DATE.csv
+ 
+-# Usage: set-tcp server tcp
++# Usage: set-tcp server(s) tcp(s)
+ function set-tcp() { 
+-    ssh root@$1 "sysctl -w net.ipv4.tcp_congestion_control=$2 >/dev/null"
++    local tcplist=$2
++    local s=0
++    for S in $1
++    do
++       local tcp=${tcplist[$s]-${tcplist[0]}}
++       echo "set-tcp $S $tcp"
++       ssh root@$S "modprobe tcp_$tcp 2>/dev/null; sysctl -w net.ipv4.tcp_congestion_control=$tcp >/dev/null"
++       ((s++))
++    done
+ }
+ 
+-# Usage: start-tcp-probe server port
++# Usage: start-tcp-probe server(s) port 
+ function start-tcp-probe() {
+-    ssh root@$1 \
+-	"rmmod tcp_probe 2>/dev/null; modprobe tcp_probe port=$2;
+-	 sleep 1; cat /proc/net/tcpprobe"
++
++    PROBE_OUT=()
++    for S in $1
++    do
++       local probe_out=$NETTEST_RESULT/${S}.probe
++       PROBE_OUT=(${PROBE_OUT[@]} $probe_out)
++       ssh root@$S \
++	"rmmod tcp_probe 2>/dev/null ;  modprobe tcp_probe port=$2 ; cat /proc/net/tcpprobe " >$probe_out &
++    done
+ }
+ 
++function stop-tcp-probe() {
++   # killing the ssh process isn't enough to kill the processes on the server, so do this manually.
++   for S in "$@" 
++   do
++       PIDs=`ssh root@$S "ps -ef | grep -i cat./proc/net/tcpprobe | grep -v grep " | awk '{print $2," "}' | tr -d '\n'`
++       ssh root@$S "kill $PIDs 2>/dev/null"
++   done
++}
+ 
+ # Header in output file
+ echo -n "# Test run on " >$OUTFILE
+@@ -82,15 +104,16 @@
+ done
+ echo >>$OUTFILE
+ 
+-. $NETTEST_DIR/apps/$APPLICATION/setup
++. $NETTEST_BIN/apps/$APPLICATION/setup
+ 
+ declare -a PROBE_PIDS PROBE_OUT TEST_PIDS 
+ 
+ function cleanup() {
+-    kill ${TEST_PIDS[*]} ${PROBE_PIDS[*]} 2>/dev/null
+-
+-    . $NETTEST_DIR/apps/$APPLICATION/cleanup
++    kill  ${TEST_PIDS[*]} 2>/dev/null
++    stop-tcp-probe ${SERVERS[@]}
++    . $NETTEST_BIN/apps/$APPLICATION/cleanup
+     rm -f ${PROBE_OUT[*]} ${TMP[*]}
++    exit
+ }
+ trap cleanup HUP INT QUIT EXIT
+ 
+@@ -101,30 +124,24 @@
+ 	for Q in ${QUEUES[@]}
+ 	do
+ 	    # Configure emulator/router
++	    if [ $USEROUTER="yes" ]; then
+ 	    set-router $RTT $RATE $Q
++	    fi
+ 
+ 	    for TCP in ${TCPS[@]}
+ 	    do
+-		for S in ${SERVERS[@]}
+-		do
+-		    set-tcp $S $TCP
+-		done
++		TCPLIST=(`echo $TCP | sed 's/:/ /g'`);
++		set-tcp "${SERVERS[*]}" "${TCPLIST[*]}"
+ 
++		for FILE in ${FILES[@]}
++		do 
+ 		if [[ $VERBOSE = "on" ]]; then
+-		    echo "RTT ${$RTT}ms, ${RATE}Mbps, queue ${Q}xBDP."
++                        echo "RTT ${RTT}ms, ${RATE}Mbps, queue ${Q}xBDP."
+ 		    echo "${NUMFLOWS} ${TCP} flows using $FILE"
+ 		fi
+ 
+-		for FILE in ${FILES[@]}
+-		do 
+    		    if [[ $TCPPROBE = "on" ]]; then
+-			echo "Starting TCP probes"
+-			for S in ${SERVERS[@]}
+-			do 
+-			   PROBE_OUT[$S]=$NETTEST_RESULT/${S}.probe
+-		           start-tcp-probe $S $PORT > ${PROBE_OUT[$S]} &
+-			   PROBE_PIDS[$S]=$!
+-			done
++		        start-tcp-probe "${SERVERS[*]}" $PORT 
+ 		    fi
+ 
+ 		    TEST_PIDS=()
+@@ -133,13 +150,15 @@
+ 		    do 
+ 			# Round robin clients and servers
+ 			CLIENT=${CLIENTS[ $(($f % ${#CLIENTS[*]})) ]}
++			SERVER=${SERVERS[ $(($f % ${#SERVERS[*]})) ]}
++			DST=${CLIENT_IP[ $(($f % ${#CLIENT_IP[*]})) ]}
+ 			SRC=${SERVER_IP[ $(($f % ${#SERVER_IP[*]})) ]}
+ 
+ 			# Run test and put time in TMP[f]
+ 			/usr/bin/time -o ${TMP[$f]} -f %3E \
+-			    $NETTEST_DIR/apps/$APPLICATION/run \
+-			    	$TESTUSER@$CLIENT $SRC $SRCDIR/$FILE \
+-				$DSTDIR/${FILE}_${f} $OPT &
++			    $NETTEST_BIN/apps/$APPLICATION/run \
++			    	$TESTUSER $CLIENT $SERVER $DST $SRC $SRCDIR/$FILE \
++				$DSTDIR/${FILE}_${f} "$OPT" &
+ 			TEST_PIDS[$f]=$!
+ 
+ 			sleep $STAGGER
+@@ -154,14 +173,22 @@
+ 
+ 		    # Collect tcpprobe
+   		    if [[ $TCPPROBE = "on" ]]; then
+-			kill ${PROBE_PIDS[*]}
+-			wait
++    			stop-tcp-probe ${SERVERS[@]}
++
++			# Output optional metrics 
++                        for i in `ls $NETTEST_BIN/metrics`
++		        do
++			   exec $i "$PROBE_OUT[*]" >>$OUTFILE
++   			done
+ 
+ 			# Concatenate all the probe output files with heder
+-			echo "# ${NUMFLOWS} ${TCP} flows." \
+-		             " RTT ${RTT}ms, ${RATE}Mbps, queue ${Q}xBDP, $FILE" \
++			if [ $USEROUTER="yes" ]; then
++			     DESC="RTT ${RTT}ms, ${RATE}Mbps, queue ${Q}xBDP."
++			fi
++			echo "# $COMMENT ${NUMFLOWS} ${TCP} flows. " \
++		             "$DESC $FILE"\
+ 			  | cat - ${PROBE_OUT[*]} | gzip \
+-			    >$NETTEST_RESULT/${TCP}-${RTT}-${RATE}-$Q-$FILE.probe.gz
++			    >$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-$FILE.probe.gz
+ 			rm -f ${PROBE_OUT[*]}
+ 			PROBE_OUT=()
+ 		    fi
+@@ -181,4 +208,3 @@
+ 	done
+     done
+ done
+-

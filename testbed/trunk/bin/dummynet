@@ -1,0 +1,22 @@
+#! /bin/bash -f
+#
+# Configure dummynet on the router
+
+# Usage: dummynet rtt-ms rate-mb queue-ratio [lossrate]
+function set-router() {
+    local latency=$(($1 / 2))ms
+    local bw=$2Mbit/s
+    local queue=`echo $1 $2 $3 | awk '{ print ($1 * $2 * $3 * 1000)/8 }'`
+    local lossrate=${4}
+
+    #echo "lossrate=$lossrate"
+    local command="\
+	kldstat |grep dummynet &>/dev/null || kldload dummynet; \
+	ipfw -f -q flush; ipfw -f -q pipe flush;  sleep 1;    \
+	ipfw -q add pipe 1 ip from $NET1 to $NET2 in       && \
+	ipfw -q add pipe 2 ip from $NET2 to $NET1 out      && \
+	ipfw pipe 1 config bw $bw queue ${queue}B delay $latency plr $lossrate  && \
+	ipfw pipe 2 config bw $bw queue ${queue}B delay $latency"
+    ssh $ROUTERUSER@$ROUTER $command
+    echo $command > /tmp/kfir
+}
