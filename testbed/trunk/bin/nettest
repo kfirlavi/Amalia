@@ -24,6 +24,7 @@ PING="off"
 FULLPROBE=0
 USEROUTER="yes"
 CONFIGCLIENT="yes"
+PORT=5001 # default port for tcpdump and iperf
 
 # Argument parsing for overrides
 while getopts "c:d:pv" flag
