@@ -3,7 +3,7 @@
 # Configure dummynet on the router
 
 # Usage: dummynet rtt-ms rate-mb queue-ratio [lossrate]
-function set-router() {
+function set_router() {
     local latency=$(($1 / 2))ms
     local bw=$2Mbit/s
     local queue=`echo $1 $2 $3 | awk '{ print ($1 * $2 * $3 * 1000)/8 }'`

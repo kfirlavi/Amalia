@@ -67,15 +67,15 @@ DATE=`date +%d%m%y-%R`
 OUTFILE=$NETTEST_RESULT/$DATE.csv
 APPLIST=(`echo $APPLICATIONS | sed 's/:/ /g'`);
 
-# Usage: set-tcp server(s) tcp(s)
-function set-tcp() { 
+# Usage: set_tcp server(s) tcp(s)
+function set_tcp() { 
     local tcplist=($2)
     local s=0
     for S in $1
     do
        local tcp=${tcplist[$s]-${tcplist[0]}}
        if [[ $VERBOSE = "on" ]]; then
-           echo "set-tcp $S $tcp"
+           echo "set_tcp $S $tcp"
        fi
        if [[ $tcp != "DEFAULT" ]]; then
        	   ssh root@$S "modprobe tcp_$tcp 2>/dev/null; sysctl -w net.ipv4.tcp_congestion_control=$tcp >/dev/null"
@@ -84,8 +84,8 @@ function set-tcp() {
     done
 }
 
-# Usage: start-tcp-probe server(s) port 
-function start-tcp-probe() {
+# Usage: start_tcp_probe server(s) port 
+function start_tcp_probe() {
 
     PROBE_OUT=()
     for S in $1
@@ -100,7 +100,7 @@ function start-tcp-probe() {
     done
 }
 
-function stop-tcp-probe() {
+function stop_tcp_probe() {
    # killing the ssh process isn't enough to kill the processes on the server, so do this manually.
    for S in "$@" 
    do
@@ -109,8 +109,8 @@ function stop-tcp-probe() {
    done
 }
 
-# Usage: start-tcpdump server(s) port 
-function start-tcpdump() {
+# Usage: start_tcpdump server(s) port 
+function start_tcpdump() {
 
        if [[ $VERBOSE = "on" ]]; then
            echo "Starting TCPDUMP on" $ROUTER
@@ -120,7 +120,7 @@ function start-tcpdump() {
 	#"tcpdump -i em2 -S -n -tt port $PORT | /root/cwnd.sh > /tmp/tcpdump.cwnd"  &
 }
 
-function stop-tcpdump() {
+function stop_tcpdump() {
    # killing the ssh process isn't enough to kill the processes on the server, so do this manually.
        DUMP_OUT=$NETTEST_RESULT/${ROUTER}.dump
        ssh root@$ROUTER  "killall tcpdump 2>/dev/null"
@@ -152,7 +152,7 @@ declare -a PROBE_PIDS PROBE_OUT TEST_PIDS
 
 function cleanup() {
     kill  ${TEST_PIDS[*]} 2>/dev/null
-    stop-tcp-probe ${SERVERS[@]}
+    stop_tcp_probe ${SERVERS[@]}
     for APPLICATION in ${APPLIST[@]}
     do
         . $NETTEST_BIN/apps/$APPLICATION/cleanup
@@ -180,7 +180,7 @@ do
 	    for TCP in ${TCPS[@]}
 	    do
 		TCPLIST=(`echo $TCP | sed 's/:/ /g'`);
-		set-tcp "${SERVERS[*]}" "${TCPLIST[*]}"
+		set_tcp "${SERVERS[*]}" "${TCPLIST[*]}"
 
 		for FILE in ${FILES[@]}
 		do 
@@ -193,10 +193,10 @@ do
 		    # - should this code be placed in its own script ?
 		    # - that would make running ns, bsd etc easier (just a change to the "run test" script).
  		    if [[ $TCPPROBE = "on" ]]; then
-		        start-tcp-probe "${SERVERS[*]}" $PORT $FULLPROBE 
+		        start_tcp_probe "${SERVERS[*]}" $PORT $FULLPROBE 
 		    fi
                     if [[ $TCPDUMP = "on" ]]; then
-                        start-tcpdump  
+                        start_tcpdump  
                     fi
 
                     if [[ $PING = "on" ]]; then
@@ -253,10 +253,10 @@ do
 
 		    # Stop tcpprobe
   		    if [[ $TCPPROBE = "on" ]]; then
-    			stop-tcp-probe ${SERVERS[@]}
+    			stop_tcp_probe ${SERVERS[@]}
                     fi
                     if [[ $TCPDUMP = "on" ]]; then
-                        stop-tcpdump 
+                        stop_tcpdump 
                     fi
   
 		    for APPLICATION in ${APPLIST[@]}

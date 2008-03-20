@@ -2,15 +2,15 @@
 #
 # Configure dummynet on the router
 
-function set-delay() {
+function set_delay() {
    ssh root@$1 \
    "tc qdisc delete dev eth0 root netem 2>/dev/null; 
    tc qdisc add dev eth0 root netem delay ${2}ms limit 10000"
    echo "$1 latency: $2 ms"
 }
 
-# Usage: set-router rtt-ms rate-mb queue-ratio servers
-function set-router() {
+# Usage: set_router rtt-ms rate-mb queue-ratio servers
+function set_router() {
 
 	local servers=(`echo $4 | sed -e 's/:/ /g'`)
 	local latency=(`echo $1 | sed -e 's/:/ /g'`)
@@ -39,7 +39,7 @@ function set-router() {
 	for S in ${servers[@]}
 	do
 	   del=${latency[$i]-$del}
-	   set-delay $S $del 
+	   set_delay $S $del 
 	   echo -n "$S latency $del, "
 	   ((i++))
 	done
