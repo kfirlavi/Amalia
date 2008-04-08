@@ -17,6 +17,7 @@ KERNEL_PREFIX="kernel-"
 CONFIG_PREFIX="config-"
 INITRD_PREFIX="initrd.img-"
 KERNEL_CONFIG="$KERNEL_DIR/.config"
+DEFAULT_KERNEL_PARAMS="root=/dev/nfs ip=dhcp console=ttyS0,38400n81"
 
 
 get_kernel_local_version()
@@ -83,7 +84,7 @@ write_pxe_default_file()
 {
 	kernel="${TFTP_KERNEL_RELATIVE_DIR}/${KERNEL_PREFIX}${1}"
 	initrd="initrd=${TFTP_KERNEL_RELATIVE_DIR}/${INITRD_PREFIX}${1}"
-	echo "DEFAULT $kernel ro $initrd" > $PXE_CFG_DIR/default
+	echo "DEFAULT $kernel ro $initrd $DEFAULT_KERNEL_PARAMS" > $PXE_CFG_DIR/default
 }
 
 main()
