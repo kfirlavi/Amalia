@@ -6,7 +6,7 @@ then
 	exit 
 fi
 TFTP_DIR=/var/lib/tftpboot/ltsp/i386
-TFTP_KERNEL_RELATIVE_DIR=kfir/compound
+TFTP_KERNEL_RELATIVE_DIR=`whoami`
 TFTP_KERNEL_DIR=$TFTP_DIR/$TFTP_KERNEL_RELATIVE_DIR
 PXE_CFG_DIR=$TFTP_DIR/pxelinux.cfg
 # This is the root filesystem that the pxeboot clients have as thier root nfs
@@ -19,6 +19,11 @@ INITRD_PREFIX="initrd.img-"
 KERNEL_CONFIG="$KERNEL_DIR/.config"
 DEFAULT_KERNEL_PARAMS="root=/dev/nfs ip=dhcp console=ttyS0,38400n81"
 
+
+create_tftp_kernel_dir()
+{
+	sudo mkdir -p $TFTP_KERNEL_DIR
+}
 
 get_kernel_local_version()
 {
@@ -89,6 +94,7 @@ write_pxe_default_file()
 
 main()
 {
+	create_tftp_kernel_dir
 	kver=`get_kernel_version`
 	install_modules_to_client_root_nfs
 	create_initrd $kver
