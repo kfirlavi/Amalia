@@ -1,17 +1,53 @@
 #!/bin/bash
+
+usage()
+{
+prog=`basename $0`
+cat << EOF
+usage: $prog -k <kernel source dir> [-m <madwifi srource dir>]
+
+This script install a kernel to ltsp root dir and generate a kernel and initrd
+for the pxe loading
+
+OPTIONS:
+	-h	Show this message
+	-k	Path to the kernel source dir
+	-m	Path to the madwifi source dir
+EOF
+}
+
+# exit if no arguments
 if [[ -z $1 ]]
 then 
-	PROGNAME=`basename $0`
-	echo "Use: $PROGNAME <kernel source dir>"
-	exit 
+	usage
+	exit 1
 fi
+
+while getopts ":k:m:h" options; do
+	case $options in
+		k) KERNEL_DIR=$(cd "$OPTARG" && pwd);;
+		m) MADWIFI_DIR=$(cd "$OPTARG" && pwd);;
+		v) DEBUG=1;;
+		h) usage
+		   exit 1;;
+		*) usage
+		   exit 1;;
+	esac
+done
+
+# KERNEL_DIR is a must
+if [[ -z $KERNEL_DIR ]]
+then 
+	usage
+	exit 1
+fi
+
 TFTP_DIR=/var/lib/tftpboot/ltsp/i386
 TFTP_KERNEL_RELATIVE_DIR=`whoami`
 TFTP_KERNEL_DIR=$TFTP_DIR/$TFTP_KERNEL_RELATIVE_DIR
 PXE_CFG_DIR=$TFTP_DIR/pxelinux.cfg
 # This is the root filesystem that the pxeboot clients have as thier root nfs
 CLIENT_ROOT_FS=/opt/ltsp/i386 
-KERNEL_DIR=$1
 BZIMAGE=arch/i386/boot/bzImage
 KERNEL_PREFIX="kernel-"
 CONFIG_PREFIX="config-"
@@ -75,6 +111,24 @@ install_modules_to_client_root_nfs()
 {
 	cd $KERNEL_DIR &&
 	make modules_install INSTALL_MOD_PATH=$CLIENT_ROOT_FS &&
+	cd -
+	install_third_party_modules
+}
+
+install_third_party_modules()
+{
+	# if MADWIFI_DIR supplied, then we install it
+	if [[ ! -z $MADWIFI_DIR ]]
+	then 
+		install_madwifi_modules
+	fi
+	# here you can add more third party modules installation
+}
+
+install_madwifi_modules()
+{
+	cd $MADWIFI_DIR
+	make install KERNELPATH=$KERNEL_DIR DESTDIR=$CLIENT_ROOT_FS
 	cd -
 }
 
