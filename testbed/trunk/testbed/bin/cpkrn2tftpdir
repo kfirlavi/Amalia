@@ -43,7 +43,7 @@ then
 fi
 
 TFTP_DIR=/var/lib/tftpboot/ltsp/i386
-TFTP_KERNEL_RELATIVE_DIR=`whoami`
+TFTP_KERNEL_RELATIVE_DIR=`echo $0 | cut -d '/' -f 3`
 TFTP_KERNEL_DIR=$TFTP_DIR/$TFTP_KERNEL_RELATIVE_DIR
 PXE_CFG_DIR=$TFTP_DIR/pxelinux.cfg
 # This is the root filesystem that the pxeboot clients have as thier root nfs
