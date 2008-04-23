@@ -4,7 +4,7 @@ usage()
 {
 prog=`basename $0`
 cat << EOF
-usage: $prog -k <kernel source dir> [-m <madwifi srource dir>]
+usage: $prog -k <kernel source dir> [-m <madwifi srource dir>] [-d <tftp dir>]
 
 This script install a kernel to ltsp root dir and generate a kernel and initrd
 for the pxe loading
@@ -13,6 +13,7 @@ OPTIONS:
 	-h	Show this message
 	-k	Path to the kernel source dir
 	-m	Path to the madwifi source dir
+	-t	Tftp dir
 EOF
 }
 
@@ -23,10 +24,12 @@ then
 	exit 1
 fi
 
-while getopts ":k:m:h" options; do
+TFTP_DIR=/var/lib/tftpboot/ltsp/i386
+while getopts ":k:m:t:h" options; do
 	case $options in
 		k) KERNEL_DIR=$(cd "$OPTARG" && pwd);;
 		m) MADWIFI_DIR=$(cd "$OPTARG" && pwd);;
+		t) TFTP_DIR=$(cd "$OPTARG" && pwd);;
 		v) DEBUG=1;;
 		h) usage
 		   exit 1;;
@@ -42,7 +45,6 @@ then
 	exit 1
 fi
 
-TFTP_DIR=/var/lib/tftpboot/ltsp/i386
 TFTP_KERNEL_RELATIVE_DIR=`echo $0 | cut -d '/' -f 3`
 TFTP_KERNEL_DIR=$TFTP_DIR/$TFTP_KERNEL_RELATIVE_DIR
 PXE_CFG_DIR=$TFTP_DIR/pxelinux.cfg
@@ -53,7 +55,10 @@ KERNEL_PREFIX="kernel-"
 CONFIG_PREFIX="config-"
 INITRD_PREFIX="initrd.img-"
 KERNEL_CONFIG="$KERNEL_DIR/.config"
-DEFAULT_KERNEL_PARAMS="root=/dev/nfs ip=dhcp console=ttyS0,38400n81"
+SERVERS_KERNEL_PARAMS="root=/dev/nfs ip=dhcp"
+CLIENTS_KERNEL_PARAMS="$SERVERS_KERNEL_PARAMS console=ttyS0,38400n81"
+PXE_CLIENTS_BOOT_FILE="$PXE_CFG_DIR/clients"
+PXE_SERVERS_BOOT_FILE="$PXE_CFG_DIR/servers"
 
 
 create_tftp_kernel_dir()
@@ -143,7 +148,9 @@ write_pxe_default_file()
 {
 	kernel="${TFTP_KERNEL_RELATIVE_DIR}/${KERNEL_PREFIX}${1}"
 	initrd="initrd=${TFTP_KERNEL_RELATIVE_DIR}/${INITRD_PREFIX}${1}"
-	echo "DEFAULT $kernel ro $initrd $DEFAULT_KERNEL_PARAMS" > $PXE_CFG_DIR/default
+	local pxe_pre="DEFAULT $kernel ro $initrd"
+	echo "$pxe_pre $SERVERS_KERNEL_PARAMS" > $PXE_SERVERS_BOOT_FILE
+	echo "$pxe_pre $CLIENTS_KERNEL_PARAMS" > $PXE_CLIENTS_BOOT_FILE
 }
 
 main()
