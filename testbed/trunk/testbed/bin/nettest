@@ -58,7 +58,6 @@ fi
 . $TESTSPEC
 
 # Read the setup code for router
-#. $NETTEST_BIN/routern
 . $NETTEST_BIN/router
 
 NETTEST_RESULT=$NETTEST_DIR/results/`basename $TESTSPEC`
