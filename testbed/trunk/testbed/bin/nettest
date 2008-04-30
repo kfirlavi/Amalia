@@ -108,7 +108,7 @@ function stop_tcp_probe() {
    done
 }
 
-# Usage: start_tcpdump server(s) port 
+# Usage: start_tcpdump
 function start_tcpdump() {
 
        if [[ $VERBOSE = "on" ]]; then
