@@ -1,0 +1,2 @@
+#!/bin/bash
+nmap -sP 192.168.1.* | grep Host | cut -d ' ' -f 2
