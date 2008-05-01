@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Globals
+OPTS="$@"
+SRC_UTIL=
+DST_TEST=
+DST_UTIL=
+TIME=
+BANDWITH=
+VERBOSE= # no verbos
+
 usage()
 {
 prog=`basename $0`
@@ -20,33 +29,49 @@ OPTIONS:
 EOF
 }
 
-# exit if no arguments
-if [[ -z $1 ]]
-then 
-	usage
-	exit 1
-fi
+check_for_no_opts()
+{
+	# exit if no arguments
+	if [[ -z $OPTS ]]
+	then 
+		usage
+		exit 1
+	fi
+}
 
-while getopts "s:d:u:t:b:vh" options; do
-	case $options in
-		s) SRC_UTIL=$OPTARG;;
-		d) DST_TEST=$OPTARG;;
-		u) DST_UTIL=$OPTARG;;
-		t) TIME=$OPTARG;;
-		b) BANDWITH=$OPTARG;;
-		v) VERBOSE=1;;
-		h) usage
-		   exit;;
-		*) usage
-		   exit 1;;
-	esac
-done
+get_opts()
+{
+	while getopts "s:d:u:t:b:vh" options; do
+		case $options in
+			s) SRC_UTIL=$OPTARG;;
+			d) DST_TEST=$OPTARG;;
+			u) DST_UTIL=$OPTARG;;
+			t) TIME=$OPTARG;;
+			b) BANDWITH=$OPTARG;;
+			v) VERBOSE=1;;
+			h) usage
+			   exit;;
+			*) usage
+			   exit 1;;
+		esac
+	done
+}
 
-if [[ -z $SRC_UTIL || -z $DST_TEST || -z $DST_UTIL || -z $TIME || -z $BANDWITH ]]
-then 
-	usage
-	exit 1
-fi
+check_for_required_opts()
+{
+	if [[ -z $SRC_UTIL || -z $DST_TEST || -z $DST_UTIL || -z $TIME || -z $BANDWITH ]]
+	then 
+		usage
+		exit 1
+	fi
+}
+
+process_options()
+{
+	check_for_no_opts
+	get_opts $OPTS
+	check_for_required_opts
+}
 
 # gets string to output and optional options to echo (-n for example)
 verbose()
@@ -168,6 +193,7 @@ run_client_iperf()
 
 main()
 {
+	process_options
 	set_dest_iperf $DST_UTIL
 	run_client_iperf $SRC_UTIL $DST_TEST $TIME $BANDWITH
 }
