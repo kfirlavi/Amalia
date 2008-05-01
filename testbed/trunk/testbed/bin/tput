@@ -1,0 +1,174 @@
+#!/bin/bash
+
+usage()
+{
+prog=`basename $0`
+cat << EOF
+usage: $prog -s ip -d ip -u ip -t seconds [-v]
+
+This script will run udp test to measure the cpacity of the link
+EXAMPLE: $prog  -s src -u client2 -d wclient2 -t 10 -b 37 -v
+
+OPTIONS:
+	-s	source computer utility interface (ssh, setting up...) 
+	-d	destination computer test interface
+	-u	destination computer utility interface (ssh, setting up...)
+	-t	time in seconds for the test
+	-b	initial bandwidth to start with the test (assuming MB)
+	-h	Show this message
+	-v 	verbose
+EOF
+}
+
+# exit if no arguments
+if [[ -z $1 ]]
+then 
+	usage
+	exit 1
+fi
+
+while getopts "s:d:u:t:b:vh" options; do
+	case $options in
+		s) SRC_UTIL=$OPTARG;;
+		d) DST_TEST=$OPTARG;;
+		u) DST_UTIL=$OPTARG;;
+		t) TIME=$OPTARG;;
+		b) BANDWITH=$OPTARG;;
+		v) VERBOSE=1;;
+		h) usage
+		   exit;;
+		*) usage
+		   exit 1;;
+	esac
+done
+
+if [[ -z $SRC_UTIL || -z $DST_TEST || -z $DST_UTIL || -z $TIME || -z $BANDWITH ]]
+then 
+	usage
+	exit 1
+fi
+
+# gets string to output and optional options to echo (-n for example)
+verbose()
+{
+	local str=$1
+	local options=$2
+	if [[ -n $VERBOSE ]]; then
+		echo $options $str
+	fi
+}
+
+# gets number
+# if this number is zero, then it prints yes, else no
+print_yes_no()
+{
+	local val=$1
+	if [[ $val == 0 ]]; then
+		verbose "[Yes]"
+	else
+		verbose "[No]"
+	fi
+}
+
+# gets number for print_yes_no
+# check if verbos is on
+verbos_yes_no()
+{
+	if [[ -n $VERBOSE ]]; then
+		print_yes_no $1
+	fi
+}
+
+# gets host
+kill_iperf()
+{
+	local host=$1
+	is_iperf_running_on $host
+	local running=$?
+	while [[ $running == 0 ]]; do
+		verbose "Killing iperf..."
+		ssh root@$host "killall iperf"
+		is_iperf_running_on $host
+		running=$?
+	done
+}
+
+# gets host
+is_iperf_running_on()
+{
+	local host=$1
+	verbose "Checking if iperf is running on $host..." "-n"
+	ssh root@$host "ps fax | grep iperf | grep -v grep" > /dev/null
+	local ret=$?
+	verbos_yes_no $ret
+	return $ret
+}
+
+# gets host 
+is_iperf_listening()
+{
+	local host=$1
+	verbose "Checking if $host is listening..." "-n"
+	ssh root@$host "netstat -p | grep iperf" > /dev/null
+	local ret=$?
+	verbos_yes_no $ret
+	return $ret
+}
+
+# runs iperf sever on destination
+# gets destination utility address
+set_dest_iperf()
+{
+	local dst=$1
+	kill_iperf $dst
+	is_iperf_listening $dst
+	local listen=$?
+	while [[ $listen > 0 ]]; do
+		verbose "Setup iperf on $dst"
+		ssh root@$dst "iperf --udp --server --interval 1 --format m" > /tmp/$dst.iperf &
+		sleep 2
+		is_iperf_listening $dst
+		local listen=$?
+	done
+}
+
+# gets output
+get_loss_from_iperf_client_output()
+{
+	local output=$1
+	local loss=`echo $output | cut -d '(' -f 3 | cut -d '%' -f 1`
+	echo $loss
+}
+
+# runs iperf client on src
+# gets source utility address
+#      dest test address 
+#      time
+#      bandwidth
+run_client_iperf()
+{
+	local src=$1
+	local dst=$2
+	local time=$3
+	local bandwidth=$4
+	kill_iperf $src
+	verbose "Run iperf on $src"
+	local loss=-1
+	while [[ $loss != 0 ]]; do
+		local ret=`ssh root@$src "iperf --udp --client $dst --time $time --bandwidth ${bandwidth}m"`
+		local loss=`get_loss_from_iperf_client_output "$ret"`
+		verbose "iperf $src -> $dst time:$time bandwidth:${bandwidth}m loss:$loss"
+		((bandwidth--))
+		# wait for the hardware layer to drain
+		if [[ $loss != 0 ]]; then 
+			sleep 5 
+		fi
+	done
+}
+
+main()
+{
+	set_dest_iperf $DST_UTIL
+	run_client_iperf $SRC_UTIL $DST_TEST $TIME $BANDWITH
+}
+main
