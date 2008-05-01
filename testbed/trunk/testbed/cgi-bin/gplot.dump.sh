@@ -92,7 +92,7 @@ j=0
 for i in $flow_ids; do
    grep -i $i $iperf >> $itemp
    echo -e '\n\n' >>$itemp
-   iplot="$iplot $comma '$itemp' index $j u 2:4 with $STYLE title 'flow $j tput'"
+   iplot="$iplot $comma '$itemp' index $j using 2:4 with $STYLE title 'flow $j tput'"
    comma=","
    ((j++))
 done

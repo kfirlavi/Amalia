@@ -19,7 +19,7 @@ j=0
 for i in $flow_ids; do
    grep -i $i $f >> $temp
    echo -e '\n\n' >>$temp
-   plot="$plot $comma '$temp' index $j u 2:4 w p title 'flow $j tput'"
+   plot="$plot $comma '$temp' index $j using 2:4 with points title 'flow $j tput'"
    comma=","
    ((j++))
 done

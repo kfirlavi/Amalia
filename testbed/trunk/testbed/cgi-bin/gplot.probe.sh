@@ -42,8 +42,8 @@ meantputs=""
 for i in $flow_ids; do
    grep -i $i $f >> $temp
    echo -e '\n\n' >>$temp
-   plot="$plot $comma '$temp' index $j u 1:7 w l title 'flow $j cwnd', '$tput' index $j u 1:2 w p axes x1y2 title 'flow $j tput'"
-   plotrtt="$plotrtt $comma '$temp' index $j u 1:10 w l title 'flow $j srtt', '$temp' index $j u 1:11 w p title 'flow $j rtt'"
+   plot="$plot $comma '$temp' index $j using 1:7 with lines title 'flow $j cwnd', '$tput' index $j using 1:2 with points axes x1y2 title 'flow $j tput'"
+   plotrtt="$plotrtt $comma '$temp' index $j using 1:10 with lines title 'flow $j srtt', '$temp' index $j using 1:11 with points title 'flow $j rtt'"
    comma=","
    meantputs=$meantputs`grep -i $i $f | awk --non-decimal-data 'BEGIN {t=-1; dt=1; sum=0; count=1;} {seq=$6; if (t<0) {t=$1; lastseq=seq;}; if ($1-t >= dt ) {tput=(seq-lastseq)*8/1024/1024/($1-t); if (tput>0 && t>200) {count=count+1;sum=sum+tput};  t=$1; lastseq=seq};  } END {printf "mean tput=%s Mbps ", sum/count; } ' ` 
 
