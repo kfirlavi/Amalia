@@ -18,10 +18,10 @@ function get_file_type()
 	then
 		FILE_TYPE=`echo $PATH_TRANSLATED | sed 's/\(.*\)\.\(.*\)\.gz/\2/'`
 	fi
-	return $FILE_TYPE
+	echo $FILE_TYPE
 }
 
-FILE_TYPE= get_file_type
+FILE_TYPE=`get_file_type`
 case "$FILE_TYPE" in
 	probe)
 		$PWD/gplot.probe.sh
