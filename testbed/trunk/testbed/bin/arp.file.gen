@@ -1,0 +1,38 @@
+#!/bin/bash
+ROOT_NFS=/opt/ltsp/i386
+ETHERS=$ROOT_NFS/etc/ethers
+START_CLIENT=1
+END_CLIENT=$1
+
+if [[ -z $END_CLIENT ]]; then
+	echo "$0 <number of clients>"
+	exit 1
+fi
+
+# gets host and interface
+get_mac_address()
+{
+	local host=$1
+	local iface=$2
+	local ret=`ssh root@$host "ifconfig | grep $iface | cut -d ' ' -f 11"`
+	echo $ret
+}
+
+main()
+{
+	local ethers=
+	for c in `seq $START_CLIENT $END_CLIENT`
+	do 
+		local mac=`get_mac_address client$c ath0`
+		ethers="${ethers}wclient$c $mac\n"
+	done
+
+	mac=`get_mac_address ap ath1`
+	ethers="${ethers}wap $mac\n"
+
+	mac=`get_mac_address src eth0`
+	ethers="${ethers}wsrc $mac\n"
+
+	echo -e $ethers > $ETHERS
+}
+main
