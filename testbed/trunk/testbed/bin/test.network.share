@@ -353,10 +353,9 @@ escape_dots()
 generate_tcpdump_start_to_end_of_experiment()
 {
 	local dump_file=$1
-	local new_file=$2
 	local start_line=`find_start_of_experiment $dump_file`
 	local end_line=`find_end_of_experiment $dump_file`
-	tail -n $end_line $dump_file | head -n $((end_line-start_line+1)) > $new_file
+	tail -n $end_line $dump_file | head -n $((end_line-start_line+1))
 }
 
 get_total_packets_sent_by_client()
@@ -383,7 +382,7 @@ generate_data_file_for_tcpdump_total_mb()
 		else
 			tmp_file=$src_dump_file
 		fi
-		generate_tcpdump_start_to_end_of_experiment $tcp_dump_file $experiment_dump_file
+		generate_tcpdump_start_to_end_of_experiment $tcp_dump_file > $experiment_dump_file
 		for c in $CLIENTS
 		do 
 			local packets=`get_total_packets_sent_by_client $experiment_dump_file "$HOSTNAME_PREFIX$c"`
