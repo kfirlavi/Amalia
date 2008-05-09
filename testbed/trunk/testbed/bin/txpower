@@ -1,0 +1,119 @@
+#!/bin/bash
+
+OPTS=$@
+START_CLIENT=1
+END_CLIENT=16
+VERBOSE= # no verbos
+CLIENTS=
+TXPOWER=
+
+usage()
+{
+prog=`basename $0`
+cat << EOF
+usage: $prog [-p num] [-d num] [-u num] [-c clients list] [-v]
+
+EXAMPLE: $prog  -p 10 -c "10,16" -v 
+	 $prog  -d 1 -c "10,16" -v  # decrease each client by 1
+
+OPTIONS:
+	-u	increas txpower 
+	-d	decreas txpower 
+	-p	txpower number value to set on the clients
+	-c	clients (just a list of clients eg. "3,16,7,9")
+	-h	Show this message
+	-v 	verbose
+EOF
+}
+
+get_opts()
+{
+	while getopts "d:u:p:c:vh" options; do
+		case $options in
+			d) TXPOWER_DOWN_BY=$OPTARG;;
+			u) TXPOWER_UP_BY=$OPTARG;;
+			p) TXPOWER=$OPTARG;;
+			c) CLIENTS=`echo $OPTARG | tr ',' ' '`;;
+			v) VERBOSE=1;;
+			h) usage
+			   exit;;
+			*) usage
+			   exit 1;;
+		esac
+	done
+}
+
+combine_clients_opts()
+{
+	if [[ -z $CLIENTS ]]; then
+		# we got -n, so we'll convert to $CLIENTS
+		CLIENTS=`seq -s ' ' $START_CLIENT $END_CLIENT`
+	fi
+}
+
+process_options()
+{
+	get_opts $OPTS
+	combine_clients_opts
+}
+
+# gets string to output and optional options to echo (-n for example)
+verbose()
+{
+	local str=$1
+	local options=$2
+	if [[ -n $VERBOSE ]]; then
+		echo $options $str
+	fi
+}
+
+
+get_txpower()
+{
+	local host=$1
+	local ret=`ssh root@$host "iwconfig ath0 2>/dev/null"`
+	local txpower=`echo $ret | cut -d '=' -f 2  | cut -d ' ' -f 1`
+	echo $txpower
+}
+
+get_txpower_from_all_clients()
+{
+	local results=
+	for c in $CLIENTS
+	do
+		local txpower=`get_txpower client$c`
+		results="$results$c $txpower\n"
+	done
+	echo -e $results
+}
+
+set_txpower()
+{
+	for c in $CLIENTS
+	do
+		local txpower=`get_txpower client$c`
+		verbose "clint$c txpower is $txpower. " "-n"
+		if [[ -n $TXPOWER_UP_BY ]]; then
+			txpower=$(echo "$txpower+$TXPOWER_UP_BY" | bc)
+		fi
+		if [[ -n $TXPOWER_DOWN_BY ]]; then
+			txpower=$(echo "$txpower-$TXPOWER_DOWN_BY" | bc)
+		fi
+		if [[ -n $TXPOWER ]]; then
+			txpower=$TXPOWER
+		fi
+		verbose "Adjusting txpower to $txpower."
+		ssh root@client$c "iwconfig ath0 txpower $txpower 2>/dev/null"
+	done
+}
+
+main()
+{
+	process_options
+	if [[ -n $TXPOWER || -n $TXPOWER_DOWN_BY || -n $TXPOWER_UP_BY ]]; then
+		set_txpower
+	else
+		get_txpower_from_all_clients
+	fi
+}
+main
