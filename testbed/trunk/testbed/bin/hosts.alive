@@ -1,2 +1,50 @@
 #!/bin/bash
-nmap -sP 192.168.1.* | grep Host | cut -d ' ' -f 2
+TEMP_FILE=/tmp/hosts
+CLIENT_START=1
+CLIENT_END=16
+
+get_wired_hosts()
+{
+	nmap -sP 192.168.1.* | grep Host | cut -d ' ' -f 2 > $TEMP_FILE
+}
+
+get_wireless_hosts()
+{
+	ssh root@ap "nmap -sP 192.168.2.*  | grep Host | cut -d ' ' -f 2" >> $TEMP_FILE
+}
+
+is_client_in_file()
+{
+	local file=$1
+	local client=$2
+
+	grep $client $file > /dev/null
+	return $?
+}
+
+print_client_if_not_up()
+{
+	local file=$1
+	local client=$2
+	is_client_in_file $file $client
+	if [[ $? > 0 ]]; then
+		echo $client
+	fi
+}
+
+main()
+{
+	get_wired_hosts
+	get_wireless_hosts
+	for i in `seq $CLIENT_START $CLIENT_END`
+	do
+		print_client_if_not_up $TEMP_FILE client$i
+		print_client_if_not_up $TEMP_FILE wclient$i
+	done
+	print_client_if_not_up $TEMP_FILE ap
+	print_client_if_not_up $TEMP_FILE src
+
+	# delete temp file
+	rm -f $TEMP_FILE
+}
+main
