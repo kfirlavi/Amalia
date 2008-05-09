@@ -55,10 +55,13 @@ KERNEL_PREFIX="kernel-"
 CONFIG_PREFIX="config-"
 INITRD_PREFIX="initrd.img-"
 KERNEL_CONFIG="$KERNEL_DIR/.config"
-SERVERS_KERNEL_PARAMS="root=/dev/nfs ip=dhcp"
-CLIENTS_KERNEL_PARAMS="$SERVERS_KERNEL_PARAMS console=ttyS0,38400n81"
+KERNEL_PARAMS="root=/dev/nfs"
+AP_KERNEL_PARAMS="$KERNEL_PARAMS ip=1.2.3.4:::::eth0:dhcp"
+SRC_KERNEL_PARAMS="$KERNEL_PARAMS ip=1.2.3.4:::::eth1:dhcp"
+CLIENTS_KERNEL_PARAMS="$KERNEL_PARAMS ip=dhcp console=ttyS0,38400n81"
 PXE_CLIENTS_BOOT_FILE="$PXE_CFG_DIR/clients"
-PXE_SERVERS_BOOT_FILE="$PXE_CFG_DIR/servers"
+PXE_AP_BOOT_FILE="$PXE_CFG_DIR/ap"
+PXE_SRC_BOOT_FILE="$PXE_CFG_DIR/src"
 
 
 create_tftp_kernel_dir()
@@ -149,7 +152,8 @@ write_pxe_default_file()
 	kernel="${TFTP_KERNEL_RELATIVE_DIR}/${KERNEL_PREFIX}${1}"
 	initrd="initrd=${TFTP_KERNEL_RELATIVE_DIR}/${INITRD_PREFIX}${1}"
 	local pxe_pre="DEFAULT $kernel ro $initrd"
-	echo "$pxe_pre $SERVERS_KERNEL_PARAMS" > $PXE_SERVERS_BOOT_FILE
+	echo "$pxe_pre $AP_KERNEL_PARAMS" > $PXE_AP_BOOT_FILE
+	echo "$pxe_pre $SRC_KERNEL_PARAMS" > $PXE_SRC_BOOT_FILE
 	echo "$pxe_pre $CLIENTS_KERNEL_PARAMS" > $PXE_CLIENTS_BOOT_FILE
 }
 
