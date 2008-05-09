@@ -11,6 +11,8 @@ BANDWIDTHS=
 PLOTS= # default no plots
 VERBOSE= # no verbos
 DIR_FOR_PLOTS="plots"
+HOSTNAME_PREFIX="192.168.2."
+STATES_RELATIVE_DIR="states"
 
 usage()
 {
@@ -27,7 +29,7 @@ OPTIONS:
 	-b	bandwidths to test
 	-n	number of clients to test together
 	-c	clients (just a list of clients eg. "3,16,7,9")
-	-p	generate plots
+	-p	generate just plots (without running experiment)
 	-h	Show this message
 	-v 	verbose
 EOF
@@ -101,7 +103,7 @@ process_options()
 	check_for_no_opts
 	get_opts $OPTS
 	check_for_required_opts
-	check_directory
+	[[ -z $PLOTS ]] && check_directory
 	combine_clients_opts
 }
 
@@ -152,10 +154,13 @@ get_client_state()
 {
 	local dir=$1
 	local pids=
+	local state_dir="$dir/$STATES_RELATIVE_DIR"
+	mkdir -p $state_dir
+	
 	for c in $CLIENTS
 	do 
 		verbose "Getting client$c state data"
-		ssh root@client$c "ifconfig 2>/dev/null ; iwconfig 2>/dev/null ; iwpriv ath0 2>/dev/null" > $dir/client$c.state &
+		ssh root@client$c "ifconfig 2>/dev/null ; iwconfig 2>/dev/null ; iwpriv ath0 2>/dev/null" > $state_dir/client$c.state &
 		local pid=`echo $!`
 		pids="$pids $pid"
 	done
@@ -292,24 +297,97 @@ generate_data_file()
 	done
 }
 
-generate_data_file_for_tcpdump()
+# will search the tcpdump file for the time that the last station started to send
+# then we can consider the experiment as started
+# gets tcpdump file
+# returns the line number
+find_start_of_experiment()
+{
+	local data_file=$1
+	local line=0
+	for c in $CLIENTS
+	do 
+		local new=`first_packet_sent_by_host $data_file "$HOSTNAME_PREFIX$c"`
+		[[ $new > $line ]] && line=$new
+	done
+	echo $line
+}
+
+# will search the tcpdump file for the time that the first station finished sending
+# then we can consider the experiment as finished
+# gets tcpdump file
+# returns the line number
+find_end_of_experiment()
+{
+	local data_file=$1
+	local line=`cat $data_file | wc -l` # max line number 
+	for c in $CLIENTS
+	do 
+		local new=`last_packet_sent_by_host $data_file "$HOSTNAME_PREFIX$c"`
+		[[ $new > $line ]] && line=$new
+	done
+	echo $line
+}
+
+# return line number in tcpdump file
+first_packet_sent_by_host()
+{
+	local data_file=$1
+	local host=`escape_dots $2`
+	grep --max-count=1  --line-number "$host\..* >" $data_file | cut -d ':' -f 1
+}
+
+# return line number in tcpdump file
+last_packet_sent_by_host()
+{
+	local data_file=$1
+	local host=`escape_dots $2`
+	grep --line-number "$host\..* >" $data_file | tail -1 | cut -d ':' -f 1
+}
+
+escape_dots()
+{
+	echo $1 | sed 's/\./\\\./g'
+}
+
+generate_tcpdump_start_to_end_of_experiment()
+{
+	local dump_file=$1
+	local new_file=$2
+	local start_line=`find_start_of_experiment $dump_file`
+	local end_line=`find_end_of_experiment $dump_file`
+	tail -n $end_line $dump_file | head -n $((end_line-start_line+1)) > $new_file
+}
+
+get_total_packets_sent_by_client()
+{
+	local data_file=$1
+	local host=`escape_dots $2`
+	grep "$host\..* >" $data_file | cut -d ' ' -f 1 | sort | uniq | wc -l
+}
+
+generate_data_file_for_tcpdump_total_mb()
 {
 	local data_file=$1
 	local input_data_directory=$2
 	local ap_dump_file=`create_temp_file`
 	local src_dump_file=`create_temp_file`
+	local experiment_dump_file=`create_temp_file`
 	for srv in ap src
 	do
+		
+		local tcp_dump_file="$input_data_directory/$srv.dump"
 		local tmp_file=
 		if [[ $srv == "ap" ]]; then 
 			tmp_file=$ap_dump_file
 		else
 			tmp_file=$src_dump_file
 		fi
+		generate_tcpdump_start_to_end_of_experiment $tcp_dump_file $experiment_dump_file
 		for c in $CLIENTS
 		do 
-			local total_packets_sent_by_client=`grep "192\.168\.2\.$c\." $input_data_directory/$srv.dump | cut -d ' ' -f 1 | sort | uniq | wc -l` 
-			echo "$c $total_packets_sent_by_client" >> $tmp_file
+			local packets=`get_total_packets_sent_by_client $experiment_dump_file "$HOSTNAME_PREFIX$c"`
+			echo "$c $packets" >> $tmp_file
 		done
 	done
 
@@ -320,6 +398,7 @@ generate_data_file_for_tcpdump()
 		echo "Error: tcpdump files are not similar!"
 	fi
 	cat $src_dump_file > $data_file
+	release_temp_file $experiment_dump_file
 	release_temp_file $src_dump_file
 	release_temp_file $ap_dump_file
 }
@@ -341,16 +420,14 @@ generate_plots()
 
 			local data_file=`create_temp_file`
 			generate_data_file $data_file $workdir
-			#plot_png_for_total_mb $data_file "$output_file.total_mb" "Iperf $plot_title"
-			#plot_png_for_kbits_per_sec $data_file "$output_file.kbits_per_sec" "Iperf $plot_title"
 			plot_png $data_file "$output_file.total_mb" "Iperf $plot_title" "Clients" "KBytes" "1:2"
 			plot_png $data_file "$output_file.kbits_per_sec" "Iperf $plot_title" "Clients" "Kbits/sec" "1:3"
 			release_temp_file $data_file
 
 			# generate dump plot
 			local data_dump_file=`create_temp_file`
-			generate_data_file_for_tcpdump $data_dump_file $workdir
-			plot_png $data_dump_file "$output_file.tcpdump" "Tcpdump $plot_title" "Clients" "number of packets sent" "1:2"
+			generate_data_file_for_tcpdump_total_mb $data_dump_file $workdir
+			plot_png $data_dump_file "$output_file.tcpdump" "Tcpdump $plot_title" "Clients" "packets sent" "1:2"
 			release_temp_file $data_dump_file
 		done
 	done
@@ -359,9 +436,9 @@ generate_plots()
 main()
 {
 	process_options
-	iterate_time_and_bandwidth
-	if [[ ! -z $PLOTS ]]; then
-		generate_plots
+	if [[ -z $PLOTS ]]; then
+		iterate_time_and_bandwidth
 	fi
+	generate_plots
 }
 main
