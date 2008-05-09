@@ -1,0 +1,367 @@
+#!/bin/bash
+
+# Globals
+OPTS="$@"
+START=1
+END=
+CLIENTS=
+TEST_OUTPUT_DIR=
+TIMES=
+BANDWIDTHS=
+PLOTS= # default no plots
+VERBOSE= # no verbos
+DIR_FOR_PLOTS="plots"
+
+usage()
+{
+prog=`basename $0`
+cat << EOF
+usage: $prog -d directory -t seconds -b bandwidth -n number [-p] [-v]
+
+This script will run udp test of shering network. It will issue all the clients at the same time to send udp to the access point.
+EXAMPLE: $prog  -d test_dir -t "10,20,300" -b "2,4,30" -n 16 -v
+
+OPTIONS:
+	-d	directory for results
+	-t	times in seconds to test
+	-b	bandwidths to test
+	-n	number of clients to test together
+	-c	clients (just a list of clients eg. "3,16,7,9")
+	-p	generate plots
+	-h	Show this message
+	-v 	verbose
+EOF
+}
+
+check_for_no_opts()
+{
+	# exit if no arguments
+	if [[ -z $OPTS ]]
+	then 
+		usage
+		exit 1
+	fi
+}
+
+get_opts()
+{
+	while getopts "d:t:b:n:c:pvh" options; do
+		case $options in
+			d) TEST_OUTPUT_DIR=$OPTARG;;
+			t) TIMES=`echo $OPTARG | tr ',' ' '`;;
+			b) BANDWIDTHS=`echo $OPTARG | tr ',' ' '`;;
+			n) END=$OPTARG;;
+			c) CLIENTS=`echo $OPTARG | tr ',' ' '`;;
+			p) PLOTS=1;;
+			v) VERBOSE=1;;
+			h) usage
+			   exit;;
+			*) usage
+			   exit 1;;
+		esac
+	done
+}
+
+check_for_required_opts()
+{
+	if [[ -z $TEST_OUTPUT_DIR || -z $TIMES || -z $BANDWIDTHS ]]
+	then 
+		usage
+		exit 1
+	fi
+
+	# or clients list or end number of clients
+	if [[ -z $END && -z $CLIENTS ]]
+	then 
+		echo "You should provide -n or -c"
+		usage
+		exit 1
+	fi
+}
+
+check_directory()
+{
+	if [[ -d $TEST_OUTPUT_DIR ]]; then
+		echo "Error: directory \"$TEST_OUTPUT_DIR\" exists!"
+		echo "I will not write on existing directory."
+		exit 1
+	fi
+}
+
+combine_clients_opts()
+{
+	if [[ ! -z $END ]]; then
+		# we got -n, so we'll convert to $CLIENTS
+		CLIENTS=`seq -s ' ' $START $END`
+	fi
+}
+
+process_options()
+{
+	check_for_no_opts
+	get_opts $OPTS
+	check_for_required_opts
+	check_directory
+	combine_clients_opts
+}
+
+# gets string to output and optional options to echo (-n for example)
+verbose()
+{
+	local str=$1
+	local options=$2
+	if [[ -n $VERBOSE ]]; then
+		echo $options $str
+	fi
+}
+
+make_results_dir()
+{
+	local t=$1
+	local b=$2
+	local dir="$TEST_OUTPUT_DIR/time.${t}.bandwidth.${b}"
+	mkdir -p $dir
+	if [[ -d $dir ]]; then
+		echo $dir
+	else
+		echo "Error: cann't create directory \"$dir\""
+		exit 1
+	fi
+}
+
+wait_for_pids_to_finish()
+{
+	local pids=$1
+	for p in $pids 
+	do 
+		verbose "Waiting for pid $p"
+		local flag=
+		while [[ -z $flag ]]; do
+			local ret=`ps fax | grep $p | grep -v grep `
+			if [[ $? == 0 ]]; then 
+				flag=1
+			else
+				sleep 1
+			fi
+		done
+	done
+}
+
+# save the state information of the client
+get_client_state()
+{
+	local dir=$1
+	local pids=
+	for c in $CLIENTS
+	do 
+		verbose "Getting client$c state data"
+		ssh root@client$c "ifconfig 2>/dev/null ; iwconfig 2>/dev/null ; iwpriv ath0 2>/dev/null" > $dir/client$c.state &
+		local pid=`echo $!`
+		pids="$pids $pid"
+	done
+
+	# wait for jobs to finish
+	for p in $pids
+	do
+		verbose "waiting for client state to arrive - pid $p"
+		wait $p
+	done
+}
+
+run_single_test()
+{
+	local t=$1
+	local b=$2
+	local first_run=
+	local pids=
+
+	local dir=`make_results_dir $t $b`
+	get_client_state $dir
+	verbose "Running $t seconds test with $b bandwidth"
+	verbose "Running tcpdump on ap"
+	ssh root@ap "tcpdump -i ath1 -S -n -tt port 5001 > /tmp/ap.dump" &
+	verbose "Running tcpdump on src"
+	ssh root@src "tcpdump -i eth0 -S -n -tt port 5001 > /tmp/src.dump" &
+	sleep 3
+	for c in $CLIENTS
+	do 
+		verbose "Running iperf on client$c"
+		local tput_options="-o -s client$c -u src -d wsrc -t $t -b $b -v"
+		if [[ ! -z $first_run ]]; then
+			tput_options="$tput_options -k"
+		fi
+		tput  $tput_options 2>&1 >> $dir/client${c} &
+		local pid=`echo $!`
+		pids="$pids $pid"
+		first_run=1
+	done
+
+	# wait for jobs to finish
+	for p in $pids
+	do
+		verbose "waiting for pid $p to finish"
+		wait $p
+	done
+	verbose "kill tcpdump on ap"
+	ssh root@ap "killall tcpdump"
+	scp root@ap:/tmp/ap.dump $dir/ap.dump
+	verbose "kill tcpdump on src"
+	ssh root@src "killall tcpdump"
+	scp root@src:/tmp/src.dump $dir/src.dump
+}
+
+iterate_time_and_bandwidth()
+{
+	for t in $TIMES
+	do
+		for b in $BANDWIDTHS
+		do
+			run_single_test $t $b 
+		done
+	done
+}
+
+kill_iperf_server()
+{
+	local pid=`ps fax | grep "tput" | grep -v grep | cut -c 0-5`
+	kill $pid
+}
+
+create_temp_file()
+{
+	prog_name=`basename $0`
+	file_name=`mktemp -t $prog_name.XXXXXX`
+	if [[ $? != 0 ]]; then
+		echo "can't create temp file"
+		exit 1
+	fi
+	echo $file_name
+}
+
+# gets temp file to delete
+release_temp_file()
+{
+	rm -f $1
+}
+
+plot_png()
+{
+	local data_file=$1
+	local output_file_name=$2
+	local title=$3
+	local xlabel=$4
+	local ylabel=$5
+	local cols=$6
+	local plot_tmp_file=`create_temp_file`
+	echo "set term png size 400,300" >> $plot_tmp_file
+	echo "set title \"$title\"" >> $plot_tmp_file                                                              
+	echo "set boxwidth 0.5" >> $plot_tmp_file                                                              
+	echo "set xtics 1" >> $plot_tmp_file                                                              
+	echo "set style fill solid 0.25 border" >> $plot_tmp_file                                                              
+	echo "set xlabel '$xlabel'" >> $plot_tmp_file
+	echo "set output '$output_file_name.png'" >> $plot_tmp_file                                                                
+	echo "set ylabel '$ylabel'" >> $plot_tmp_file
+	echo "plot \"$data_file\" using $cols with boxes title ''" >> $plot_tmp_file
+	gnuplot < $plot_tmp_file
+	release_temp_file $plot_tmp_file
+}
+
+convert_mb_to_kb()
+{
+	local str=$1
+	local num=`echo $str | cut -d ' ' -f 1`
+	local scale=`echo $str | cut -d ' ' -f 2`
+	if [[ $scale == 'Mbits/sec' || $scale == 'MBytes' ]]; then 
+		num=$(echo "$num*1000" | bc)
+	fi
+	echo $num
+}
+
+generate_data_file()
+{
+	local data_file=$1
+	local input_data_directory=$2
+	for c in $CLIENTS
+	do
+		local tmp=`grep bits $input_data_directory/client$c | cut -d ']' -f 3`
+		local total=`echo $tmp | cut -d ' ' -f 3-4`
+		local bit_per_sec=`echo $tmp | cut -d ' ' -f 5-6`
+		bit_per_sec=`convert_mb_to_kb "$bit_per_sec"`
+		total=`convert_mb_to_kb "$total"`
+		echo "$c $total $bit_per_sec" >> $data_file
+	done
+}
+
+generate_data_file_for_tcpdump()
+{
+	local data_file=$1
+	local input_data_directory=$2
+	local ap_dump_file=`create_temp_file`
+	local src_dump_file=`create_temp_file`
+	for srv in ap src
+	do
+		local tmp_file=
+		if [[ $srv == "ap" ]]; then 
+			tmp_file=$ap_dump_file
+		else
+			tmp_file=$src_dump_file
+		fi
+		for c in $CLIENTS
+		do 
+			local total_packets_sent_by_client=`grep "192\.168\.2\.$c\." $input_data_directory/$srv.dump | cut -d ' ' -f 1 | sort | uniq | wc -l` 
+			echo "$c $total_packets_sent_by_client" >> $tmp_file
+		done
+	done
+
+	# check if the files are similar
+	diff $ap_dump_file $src_dump_file 
+	if [[ $? != 0 ]]; then
+		# they are not similar
+		echo "Error: tcpdump files are not similar!"
+	fi
+	cat $src_dump_file > $data_file
+	release_temp_file $src_dump_file
+	release_temp_file $ap_dump_file
+}
+
+generate_plots()
+{
+	local t=
+	local b=
+	local plots_dir=$TEST_OUTPUT_DIR/$DIR_FOR_PLOTS
+	mkdir -p $plots_dir
+
+	for t in $TIMES
+	do
+		for b in $BANDWIDTHS
+		do
+			local output_file="$plots_dir/iperf.time.$t.bandwidth.${b}m"
+			local plot_title="udp\n($CLIENTS -> src)\nDuration:$t Bandwidth:${b}m"
+			local workdir="$TEST_OUTPUT_DIR/time.$t.bandwidth.$b"
+
+			local data_file=`create_temp_file`
+			generate_data_file $data_file $workdir
+			#plot_png_for_total_mb $data_file "$output_file.total_mb" "Iperf $plot_title"
+			#plot_png_for_kbits_per_sec $data_file "$output_file.kbits_per_sec" "Iperf $plot_title"
+			plot_png $data_file "$output_file.total_mb" "Iperf $plot_title" "Clients" "KBytes" "1:2"
+			plot_png $data_file "$output_file.kbits_per_sec" "Iperf $plot_title" "Clients" "Kbits/sec" "1:3"
+			release_temp_file $data_file
+
+			# generate dump plot
+			local data_dump_file=`create_temp_file`
+			generate_data_file_for_tcpdump $data_dump_file $workdir
+			plot_png $data_dump_file "$output_file.tcpdump" "Tcpdump $plot_title" "Clients" "number of packets sent" "1:2"
+			release_temp_file $data_dump_file
+		done
+	done
+}
+
+main()
+{
+	process_options
+	iterate_time_and_bandwidth
+	if [[ ! -z $PLOTS ]]; then
+		generate_plots
+	fi
+}
+main
