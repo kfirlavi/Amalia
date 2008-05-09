@@ -24,6 +24,8 @@ OPTIONS:
 	-u	destination computer utility interface (ssh, setting up...)
 	-t	time in seconds for the test
 	-b	initial bandwidth to start with the test (assuming MB)
+	-k	asume server is already up, so don't load it (for triggering more then one instance with one server)
+	-o	run iperf once
 	-h	Show this message
 	-v 	verbose
 EOF
@@ -41,13 +43,15 @@ check_for_no_opts()
 
 get_opts()
 {
-	while getopts "s:d:u:t:b:vh" options; do
+	while getopts "s:d:u:t:b:kovh" options; do
 		case $options in
 			s) SRC_UTIL=$OPTARG;;
 			d) DST_TEST=$OPTARG;;
 			u) DST_UTIL=$OPTARG;;
 			t) TIME=$OPTARG;;
 			b) BANDWITH=$OPTARG;;
+			k) DONT_LOAD_DST_SERVER=1;;
+			o) ONCE=1;;
 			v) VERBOSE=1;;
 			h) usage
 			   exit;;
@@ -165,24 +169,22 @@ get_loss_from_iperf_client_output()
 	echo $loss
 }
 
-# runs iperf client on src
+# find the max bandwidth
 # gets source utility address
 #      dest test address 
 #      time
 #      bandwidth
-run_client_iperf()
+find_max_bandwidth()
 {
 	local src=$1
 	local dst=$2
 	local time=$3
 	local bandwidth=$4
 	kill_iperf $src
-	verbose "Run iperf on $src"
+	verbose "Run iperf on $src -> $dst"
 	local loss=-1
 	while [[ $loss != 0 ]]; do
-		local ret=`ssh root@$src "iperf --udp --client $dst --time $time --bandwidth ${bandwidth}m"`
-		local loss=`get_loss_from_iperf_client_output "$ret"`
-		verbose "iperf $src -> $dst time:$time bandwidth:${bandwidth}m loss:$loss"
+		run_iperf_client_once $src $dst $time $bandwidth
 		((bandwidth--))
 		# wait for the hardware layer to drain
 		if [[ $loss != 0 ]]; then 
@@ -191,10 +193,37 @@ run_client_iperf()
 	done
 }
 
+# runs iperf client on src
+# gets source utility address
+#      dest test address 
+#      time
+#      bandwidth
+run_iperf_client_once()
+{
+	local src=$1
+	local dst=$2
+	local time=$3
+	local bandwidth=$4
+	kill_iperf $src
+	verbose "Run iperf on $src -> $dst"
+	local ret=`ssh root@$src "iperf --udp --client $dst --time $time --bandwidth ${bandwidth}m"`
+	verbose "$ret"
+	local loss=`get_loss_from_iperf_client_output "$ret"`
+	verbose "iperf $src -> $dst time:$time bandwidth:${bandwidth}m loss:$loss"
+}
+
+
 main()
 {
 	process_options
-	set_dest_iperf $DST_UTIL
-	run_client_iperf $SRC_UTIL $DST_TEST $TIME $BANDWITH
+	# don't create dest iperf if -k is on
+	if [[ -z $DONT_LOAD_DST_SERVER ]]; then
+		set_dest_iperf $DST_UTIL
+	fi
+	if [[ -z $ONCE ]]; then
+		find_max_bandwidth $SRC_UTIL $DST_TEST $TIME $BANDWITH
+	else
+		run_iperf_client_once $SRC_UTIL $DST_TEST $TIME $BANDWITH
+	fi
 }
 main
