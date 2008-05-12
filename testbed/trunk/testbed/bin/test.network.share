@@ -13,6 +13,10 @@ VERBOSE= # no verbos
 DIR_FOR_PLOTS="plots"
 HOSTNAME_PREFIX="192.168.2."
 STATES_RELATIVE_DIR="states"
+TCPDUMP_THROUGHPUT_IN_TIME_START=0
+TCPDUMP_THROUGHPUT_IN_TIME_DURATION=20
+TCPDUMP_THROUGHPUT_IN_TIME_MAX_PACKETS_SEND=0
+IPERF_PORT=5001
 
 usage()
 {
@@ -113,7 +117,7 @@ verbose()
 	local str=$1
 	local options=$2
 	if [[ -n $VERBOSE ]]; then
-		echo $options $str
+		echo $options $str >&2
 	fi
 }
 
@@ -308,7 +312,7 @@ find_start_of_experiment()
 	for c in $CLIENTS
 	do 
 		local new=`first_packet_sent_by_host $data_file "$HOSTNAME_PREFIX$c"`
-		[[ $new > $line ]] && line=$new
+		[[ $new -gt $line ]] && line=$new
 	done
 	echo $line
 }
@@ -324,7 +328,8 @@ find_end_of_experiment()
 	for c in $CLIENTS
 	do 
 		local new=`last_packet_sent_by_host $data_file "$HOSTNAME_PREFIX$c"`
-		[[ $new > $line ]] && line=$new
+		[[ $new -lt $line ]] && line=$new
+		verbose "last packet sent by $HOSTNAME_PREFIX$c is in line $new in the file $data_file"
 	done
 	echo $line
 }
@@ -333,16 +338,37 @@ find_end_of_experiment()
 first_packet_sent_by_host()
 {
 	local data_file=$1
-	local host=`escape_dots $2`
-	grep --max-count=1  --line-number "$host\..* >" $data_file | cut -d ':' -f 1
+	local pattern=`host_pattern_for_grep $2`
+	local second=`grep --max-count=1 "$pattern" $data_file | cut -d '.' -f 1`
+	((second++)) # return the next second which every client had at most one second to start
+	grep --max-count=1 --line-number "$second" $data_file | cut -d ':' -f 1
 }
 
 # return line number in tcpdump file
 last_packet_sent_by_host()
 {
 	local data_file=$1
-	local host=`escape_dots $2`
-	grep --line-number "$host\..* >" $data_file | tail -1 | cut -d ':' -f 1
+	local pattern=`host_pattern_for_grep $2`
+	local line=`grep "$pattern" $data_file`
+	if [[ -n $line ]]; then
+		local second=$(grep "$pattern" $data_file | tail -1 | cut -d '.' -f 1)
+		#((second--)) # return the previouse second which every client had at least one second to finish
+		#verbose "last packet sent in second $second"
+		local line_number=`grep --line-number "$second" $data_file | tail -1 | cut -d ':' -f 1`
+		echo $((line_number+1))
+	else 
+		# this is if a station don't have lines in the file
+		# return the last line in the file
+		local total_lines=$(cat $data_file | wc -l)
+		verbose "$total_lines lines in $data_file"
+		echo $total_lines
+	fi
+}
+
+host_pattern_for_grep()
+{
+	local host=`escape_dots $1`
+	echo "$host\..* >.*$IPERF_PORT"
 }
 
 escape_dots()
@@ -355,14 +381,15 @@ generate_tcpdump_start_to_end_of_experiment()
 	local dump_file=$1
 	local start_line=`find_start_of_experiment $dump_file`
 	local end_line=`find_end_of_experiment $dump_file`
+	verbose "chopping $dump_file from $start_line to $end_line" # debug
 	tail -n $end_line $dump_file | head -n $((end_line-start_line+1))
 }
 
 get_total_packets_sent_by_client()
 {
 	local data_file=$1
-	local host=`escape_dots $2`
-	grep "$host\..* >" $data_file | cut -d ' ' -f 1 | sort | uniq | wc -l
+	local pattern=`host_pattern_for_grep $2`
+	grep "$pattern" $data_file | cut -d ' ' -f 1 | sort | uniq | wc -l
 }
 
 generate_data_file_for_tcpdump_total_mb()
@@ -391,7 +418,8 @@ generate_data_file_for_tcpdump_total_mb()
 	done
 
 	# check if the files are similar
-	diff $ap_dump_file $src_dump_file 
+	diff $ap_dump_file $src_dump_file > /dev/null
+	#diff $ap_dump_file $src_dump_file 
 	if [[ $? != 0 ]]; then
 		# they are not similar
 		echo "Error: tcpdump files are not similar!"
@@ -400,6 +428,78 @@ generate_data_file_for_tcpdump_total_mb()
 	release_temp_file $experiment_dump_file
 	release_temp_file $src_dump_file
 	release_temp_file $ap_dump_file
+}
+
+generate_data_file_for_tcpdump_throughput_in_time()
+{
+	local experiment_dump_file=$1 # tcpdump file that has just the packets of the experiment
+	# second inside the experiment you want start showing the progress
+	local start_time=$TCPDUMP_THROUGHPUT_IN_TIME_START 
+	# for how long the graph will show 
+	local duration=$TCPDUMP_THROUGHPUT_IN_TIME_DURATION 
+	local max_packets=0
+	local first_second=`head -1 $experiment_dump_file | cut -d '.' -f 1`
+	local last_second=`tail -1 $experiment_dump_file | cut -d '.' -f 1`
+
+	verbose "$first_second $last_second"
+	# if duration is more then the experiment, just contineu to the last_second of the experiment
+	[[ $duration -gt $last_second ]] && duration=$last_second
+
+	local data=""
+	local counter=$first_second
+	while [[ $counter -le $((first_second+duration)) ]]
+	do
+		data="$data\n$counter $((counter-first_second+1)) " # normalize the seconds to start with 0
+		local tmp_file=`create_temp_file`
+
+		# get all packets with time stamp of $second
+		grep "^$counter" $experiment_dump_file > $tmp_file
+		for c in $CLIENTS
+		do 
+			local packets=`get_total_packets_sent_by_client $tmp_file "$HOSTNAME_PREFIX$c"`
+
+			# if there is no packets from $c, then put 0
+			[[ -z $packets ]] && packets=0
+			[[ $packets -gt $max_packets ]] && max_packets=$packets
+			data="$data $packets"
+		done
+		release_temp_file tmp_file
+		((counter++))
+	done
+	TCPDUMP_THROUGHPUT_IN_TIME_MAX_PACKETS_SEND=$max_packets
+	echo -e $data
+}
+
+generate_tcpdump_plots()
+{
+	local workdir=$1
+	local plot_tmp_file=$2
+	local plot_title=$3
+	local experiment_dump_file=`create_temp_file`
+	local data_dump_file=`create_temp_file`
+
+	generate_tcpdump_start_to_end_of_experiment $workdir/ap.dump > $experiment_dump_file
+	generate_data_file_for_tcpdump_throughput_in_time $experiment_dump_file > $data_dump_file
+	#cat $data_dump_file # debug
+
+	generate_data_file_for_tcpdump_total_mb $data_dump_file $workdir
+	plot_png $data_dump_file "$plot_file_name.tcpdump" "Tcpdump $plot_title" "Clients" "packets sent" "1:2"
+
+	release_temp_file $data_dump_file
+	release_temp_file $experiment_dump_file
+}
+
+generate_index_file()
+{
+	local dir=$1
+	local html=$dir/index.html
+	echo "<html><body>" > $html
+	for i in `find $dir/*.png  -name '*png' -exec basename {} \; | sort -n -t t -k 6,6n`
+	do
+		local image=`basename $i`
+		echo "<img align='center' src='$image' alt='' />" >> $html
+	done
+	echo "</html></body>" >> $html
 }
 
 generate_plots()
@@ -413,23 +513,20 @@ generate_plots()
 	do
 		for b in $BANDWIDTHS
 		do
-			local output_file="$plots_dir/iperf.time.$t.bandwidth.${b}m"
+			local plot_file_name="$plots_dir/iperf.time.$t.bandwidth.${b}m"
 			local plot_title="udp\n($CLIENTS -> src)\nDuration:$t Bandwidth:${b}m"
 			local workdir="$TEST_OUTPUT_DIR/time.$t.bandwidth.$b"
 
 			local data_file=`create_temp_file`
 			generate_data_file $data_file $workdir
-			plot_png $data_file "$output_file.total_mb" "Iperf $plot_title" "Clients" "KBytes" "1:2"
-			plot_png $data_file "$output_file.kbits_per_sec" "Iperf $plot_title" "Clients" "Kbits/sec" "1:3"
+			plot_png $data_file "$plot_file_name.total_mb" "Iperf $plot_title" "Clients" "KBytes" "1:2"
+			plot_png $data_file "$plot_file_name.kbits_per_sec" "Iperf $plot_title" "Clients" "Kbits/sec" "1:3"
 			release_temp_file $data_file
 
-			# generate dump plot
-			local data_dump_file=`create_temp_file`
-			generate_data_file_for_tcpdump_total_mb $data_dump_file $workdir
-			plot_png $data_dump_file "$output_file.tcpdump" "Tcpdump $plot_title" "Clients" "packets sent" "1:2"
-			release_temp_file $data_dump_file
+			generate_tcpdump_plots "$workdir" "$plot_file_name" "$plot_title"
 		done
 	done
+	generate_index_file $plots_dir
 }
 
 main()
