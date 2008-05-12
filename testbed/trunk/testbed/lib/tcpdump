@@ -2,9 +2,14 @@
 
 # Globals
 TCPDUMP_THROUGHPUT_IN_TIME_START=0
-TCPDUMP_THROUGHPUT_IN_TIME_DURATION=20
+TCPDUMP_THROUGHPUT_IN_TIME_THROUGHPUT_PLOTS_DURATION=20
 TCPDUMP_THROUGHPUT_IN_TIME_MAX_PACKETS_SEND=0
 HOSTNAME_PREFIX="192.168.2."
+THROUGHPUT_PLOTS_START_TIME=0
+THROUGHPUT_PLOTS_DURATION=20
+MAX_PACKETS_SEND=0
+#PNG_SIZE="1024,768"
+PNG_SIZE="400,300"
 
 # will search the tcpdump file for the time that the last station started to send
 # then we can consider the experiment as started
@@ -140,7 +145,7 @@ generate_data_file_for_tcpdump_throughput_in_time()
 	# second inside the experiment you want start showing the progress
 	local start_time=$TCPDUMP_THROUGHPUT_IN_TIME_START 
 	# for how long the graph will show 
-	local duration=$TCPDUMP_THROUGHPUT_IN_TIME_DURATION 
+	local duration=$TCPDUMP_THROUGHPUT_IN_TIME_THROUGHPUT_PLOTS_DURATION 
 	local max_packets=0
 	local first_second=`head -1 $experiment_dump_file | cut -d '.' -f 1`
 	local last_second=`tail -1 $experiment_dump_file | cut -d '.' -f 1`
@@ -174,21 +179,136 @@ generate_data_file_for_tcpdump_throughput_in_time()
 	echo -e $data
 }
 
+common_plot_commands_for_throughput_plots()
+{
+        local title=$1
+        local xlabel=$2
+        local ylabel=$3
+	cat <<- EOF
+		set term png size $PNG_SIZE
+		set title "$title"
+		set boxwidth 0.5
+		set xtics 1
+		set style fill solid 0.25 border
+		set xlabel '$xlabel'
+		set ylabel '$ylabel'
+		set yrange [0:$MAX_PACKETS_SEND]
+		set xrange [0:$DURATION]
+		EOF
+}
+
+generate_throughput_plot_for_each_client()
+{
+        local data_file=$1
+        local output_file_name=$2
+        local title=$3
+        local xlabel=$4
+        local ylabel=$5
+        local plot_tmp_file=`create_temp_file`
+	common_plot_commands_for_throughput_plots "$title" "$xlabel" "$ylabel" > $plot_tmp_file
+
+	for c in $CLIENTS
+	do
+        	echo "set output '$output_file_name.client$c.png'" >> $plot_tmp_file
+		local col=$((c+1))
+	        echo "plot \"$data_file\" using 1:$col with lines title 'client$c'" >> $plot_tmp_file
+	done
+        gnuplot < $plot_tmp_file
+        release_temp_file $plot_tmp_file
+}
+
+generate_throughput_plot_clients_combined()
+{
+        local data_file=$1
+        local output_file_name=$2
+        local title=$3
+        local xlabel=$4
+        local ylabel=$5
+        local plot_tmp_file=`create_temp_file`
+	common_plot_commands_for_throughput_plots "$title" "$xlabel" "$ylabel" > $plot_tmp_file
+        echo "set output '$output_file_name.png'" >> $plot_tmp_file
+	echo -n "plot " >> $plot_tmp_file
+
+	local first_client=$(echo $CLIENTS | cut -d ' ' -f 1)
+	for c in $CLIENTS
+	do
+		[[ $c != $first_client ]] && echo -n ", " >> $plot_tmp_file
+		local col=$((c+1))
+	        echo -n "\"$data_file\" using 1:$col with lines title 'client$c'" >> $plot_tmp_file
+	done
+        gnuplot < $plot_tmp_file
+        release_temp_file $plot_tmp_file
+}
+
+generate_data_file_for_throughput_plot()
+{
+	local experiment_dump_file=$1 # tcpdump file that has just the packets of the experiment
+	local start_time=$2
+	local duration=$3
+	local descrete_time_stamp_data=$(create_temp_file)
+
+	# get all the time stamps for the duration 
+	local all_time_stamps=$(cat $experiment_dump_file | cut -d '.' -f 1 | sort | uniq | head -$((start_time+duration)) | tail -$duration)
+	local base_time=$(echo $all_time_stamps | cut -d ' ' -f 1)
+	for s in $all_time_stamps
+	do
+		local line="$((s-base_time+1)) "
+		grep "^$s" $experiment_dump_file > $descrete_time_stamp_data
+		for c in $CLIENTS
+		do 
+			local packets=$(get_total_packets_sent_by_client $descrete_time_stamp_data "$HOSTNAME_PREFIX$c")
+			[[ -z $packets ]] && packets=0
+			[[ $packets -gt $MAX_PACKETS_SEND ]] && MAX_PACKETS_SEND=$packets
+			line="$line $packets"
+		done
+		echo $line
+	done
+	release_temp_file $duration_data
+	release_temp_file $descrete_time_stamp_data
+}
+
 generate_tcpdump_plots()
 {
 	local workdir=$1
-	local plot_tmp_file=$2
-	local plot_title=$3
+	local plots_dir=$2
+	local plot_file_name=$3
+	local plot_title=$4
 	local experiment_dump_file=`create_temp_file`
 	local data_dump_file=`create_temp_file`
+	local throuput_plots_data=`create_temp_file`
+
+	local throuput_plots_dir=$plots_dir/throughput
+	create_directory $throuput_plots_dir
 
 	generate_tcpdump_start_to_end_of_experiment $workdir/ap.dump > $experiment_dump_file
 	generate_data_file_for_tcpdump_throughput_in_time $experiment_dump_file > $data_dump_file
 
 	generate_data_file_for_tcpdump_total_mb $data_dump_file $workdir
-	plot_png $data_dump_file "$plot_file_name.tcpdump" "Tcpdump $plot_title" "Clients" "packets sent" "1:2"
+	plot_png $data_dump_file \
+		"$plots_dir/$plot_file_name.tcpdump" \
+		"Tcpdump $plot_title" "Clients" "packets sent" "1:2"
+
+	# generate throuput plots
+	generate_data_file_for_throughput_plot \
+		$workdir/ap.dump \
+		$THROUGHPUT_PLOTS_START_TIME \
+		$THROUGHPUT_PLOTS_DURATION > $throuput_plots_data
+
+	generate_throughput_plot_clients_combined \
+		$throuput_plots_data \
+		"$throuput_plots_dir/$plot_file_name.tcpdump.throughput.all.clients.combined" \
+		"Distribution of clients\nTime $THROUGHPUT_PLOTS_START_TIME to $((THROUGHPUT_PLOTS_DURATION+THROUGHPUT_PLOTS_START_TIME))" \
+		"time" \
+		"packets" 
+
+	generate_throughput_plot_for_each_client $throuput_plots_data \
+		"$throuput_plots_dir/$plot_file_name.tcpdump.throughput" \
+		"Distribution of clients\nTime $THROUGHPUT_PLOTS_START_TIME to $((THROUGHPUT_PLOTS_DURATION+THROUGHPUT_PLOTS_START_TIME))" \
+		"time" \
+		"packets"
 
 	release_temp_file $data_dump_file
 	release_temp_file $experiment_dump_file
+	release_temp_file $throuput_plots_data
 }
 

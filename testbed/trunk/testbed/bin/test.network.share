@@ -256,10 +256,9 @@ generate_index_file()
 	local dir=$1
 	local html=$dir/index.html
 	echo "<html><body>" > $html
-	for i in `find $dir/*.png  -name '*png' -exec basename {} \; | sort -n -t t -k 6,6n`
+	for i in $(cd $dir && find -name '*png' | sort -n -t t -k 9,9n)
 	do
-		local image=`basename $i`
-		echo "<img align='center' src='$image' alt='' />" >> $html
+		echo "<img align='center' src='$i' alt='' />" >> $html
 	done
 	echo "</html></body>" >> $html
 }
@@ -275,6 +274,7 @@ generate_plots()
 	do
 		for b in $BANDWIDTHS
 		do
+			local file_name="iperf.time.$t.bandwidth.${b}m"
 			local plot_file_name="$plots_dir/iperf.time.$t.bandwidth.${b}m"
 			local plot_title="udp\n($CLIENTS -> src)\nDuration:$t Bandwidth:${b}m"
 			local workdir="$TEST_OUTPUT_DIR/time.$t.bandwidth.$b"
@@ -285,7 +285,7 @@ generate_plots()
 			plot_png $data_file "$plot_file_name.kbits_per_sec" "Iperf $plot_title" "Clients" "Kbits/sec" "1:3"
 			release_temp_file $data_file
 
-			generate_tcpdump_plots "$workdir" "$plot_file_name" "$plot_title"
+			generate_tcpdump_plots "$workdir" "$plots_dir" "$file_name" "$plot_title"
 		done
 	done
 	generate_index_file $plots_dir

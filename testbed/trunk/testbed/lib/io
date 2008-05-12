@@ -23,6 +23,18 @@ debug()
 	fi
 }
 
+debug_cat_file()
+{
+	local file=$1
+	local name=$2
+	if [[ -n $DEBUG ]]; then
+		debug "Printing file: $file"
+		[[ -n $name ]] && debug "File name is: $name"
+		debug "-----------------------------------------------------"
+		cat $file >&2
+	fi
+}
+
 error()
 {
 	local str=$1
