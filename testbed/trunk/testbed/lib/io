@@ -1,0 +1,70 @@
+#!/bin/bash
+
+# Globals
+VERBOSE= # no verbos
+DEBUG= # no debug
+
+# gets string to output and optional options to echo (-n for example)
+verbose()
+{
+	local str=$1
+	local options=$2
+	if [[ -n $VERBOSE ]]; then
+		echo $options "$str" >&2
+	fi
+}
+
+debug()
+{
+	local str=$1
+	local options=$2
+	if [[ -n $DEBUG ]]; then
+		echo $options "DEBUG: $str" >&2
+	fi
+}
+
+error()
+{
+	local str=$1
+	local options=$2
+	echo $options "Error: $str" >&2
+}
+
+create_temp_file()
+{
+	prog_name=`basename $0`
+	file_name=`mktemp -t $prog_name.XXXXXX`
+	if [[ $? != 0 ]]; then
+		echo "can't create temp file"
+		exit 1
+	fi
+	echo $file_name
+}
+
+# gets temp file to delete
+release_temp_file()
+{
+	rm -f $1
+}
+
+create_directory()
+{
+	local dir=$1
+	mkdir -p $dir
+	if [[ -d $dir ]]; then
+		echo $dir
+	else
+		error "Error: cann't create directory \"$dir\""
+		exit 1
+	fi
+}
+
+check_directory()
+{
+	local dir=$1
+	if [[ -d $dir ]]; then
+		error "directory \"$dir\" exists!"
+		error "I will not write on existing directory."
+		exit 1
+	fi
+}

@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+include_library()
+{
+	local file=$1
+	if [[ -a $file ]]; then
+		source $file
+	else 
+		error "Can't include $file"
+		exit 1
+	fi
+}

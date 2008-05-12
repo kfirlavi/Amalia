@@ -1,0 +1,15 @@
+#!/bin/bash 
+
+# Globals
+OPTS="$@"
+
+check_for_no_opts()
+{
+	# exit if no arguments
+	if [[ -z $OPTS ]]
+	then 
+		usage
+		exit 1
+	fi
+}
+
