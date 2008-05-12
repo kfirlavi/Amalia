@@ -20,23 +20,23 @@ IPERF_PORT=5001
 
 usage()
 {
-prog=`basename $0`
-cat << EOF
-usage: $prog -d directory -t seconds -b bandwidth -n number [-p] [-v]
+	prog=`basename $0`
+	cat <<- EOF
+		usage: $prog -d directory -t seconds -b bandwidth -n number [-p] [-v]
 
-This script will run udp test of shering network. It will issue all the clients at the same time to send udp to the access point.
-EXAMPLE: $prog  -d test_dir -t "10,20,300" -b "2,4,30" -n 16 -v
+		This script will run udp test of shering network. It will issue all the clients at the same time to send udp to the access point.
+		EXAMPLE: $prog  -d test_dir -t "10,20,300" -b "2,4,30" -n 16 -v
 
-OPTIONS:
-	-d	directory for results
-	-t	times in seconds to test
-	-b	bandwidths to test
-	-n	number of clients to test together
-	-c	clients (just a list of clients eg. "3,16,7,9")
-	-p	generate just plots (without running experiment)
-	-h	Show this message
-	-v 	verbose
-EOF
+		OPTIONS:
+			-d	directory for results
+			-t	times in seconds to test
+			-b	bandwidths to test
+			-n	number of clients to test together
+			-c	clients (just a list of clients eg. "3,16,7,9")
+			-p	generate just plots (without running experiment)
+			-h	Show this message
+			-v 	verbose
+		EOF
 }
 
 check_for_no_opts()
@@ -261,18 +261,17 @@ plot_png()
 	local xlabel=$4
 	local ylabel=$5
 	local cols=$6
-	local plot_tmp_file=`create_temp_file`
-	echo "set term png size 400,300" >> $plot_tmp_file
-	echo "set title \"$title\"" >> $plot_tmp_file                                                              
-	echo "set boxwidth 0.5" >> $plot_tmp_file                                                              
-	echo "set xtics 1" >> $plot_tmp_file                                                              
-	echo "set style fill solid 0.25 border" >> $plot_tmp_file                                                              
-	echo "set xlabel '$xlabel'" >> $plot_tmp_file
-	echo "set output '$output_file_name.png'" >> $plot_tmp_file                                                                
-	echo "set ylabel '$ylabel'" >> $plot_tmp_file
-	echo "plot \"$data_file\" using $cols with boxes title ''" >> $plot_tmp_file
-	gnuplot < $plot_tmp_file
-	release_temp_file $plot_tmp_file
+	gnuplot <<- EOF
+		set term png size 400,300
+		set title "$title"
+		set boxwidth 0.5
+		set xtics 1
+		set style fill solid 0.25 border
+		set xlabel '$xlabel'
+		set output '$output_file_name.png'
+		set ylabel '$ylabel'
+		plot "$data_file" using $cols with boxes title ''
+		EOF
 }
 
 convert_mb_to_kb()
