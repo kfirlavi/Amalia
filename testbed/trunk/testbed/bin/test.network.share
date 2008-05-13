@@ -8,7 +8,6 @@ source $LIB_PATH/opts
 source $LIB_PATH/tcpdump
 
 # Globals
-START=1
 END=
 CLIENTS=
 TEST_OUTPUT_DIR=
@@ -221,6 +220,8 @@ plot_png()
 		set xlabel '$xlabel'
 		set output '$output_file_name.png'
 		set ylabel '$ylabel'
+		set yrange [0:]
+		set xrange [0:]
 		plot "$data_file" using $cols with boxes title ''
 		EOF
 }
