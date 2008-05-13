@@ -2,6 +2,7 @@
 
 # Globals
 OPTS="$@"
+START=1
 
 check_for_no_opts()
 {
@@ -10,6 +11,25 @@ check_for_no_opts()
 	then 
 		usage
 		exit 1
+	fi
+}
+
+check_clients_opts()
+{
+	# or clients list or end number of clients
+	if [[ -z $END && -z $CLIENTS ]]
+	then 
+		echo "You should provide -n or -c"
+		usage
+		exit 1
+	fi
+}
+
+combine_clients_opts()
+{
+	if [[ ! -z $END ]]; then
+		# we got -n, so we'll convert to $CLIENTS
+		CLIENTS=`seq -s ' ' $START $END`
 	fi
 }
 
