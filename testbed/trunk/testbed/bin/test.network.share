@@ -6,6 +6,8 @@ LIB_PATH="$(dirname $0)/../lib"
 source $LIB_PATH/io
 source $LIB_PATH/opts
 source $LIB_PATH/tcpdump
+source $LIB_PATH/802.11b
+source $LIB_PATH/wireless
 
 # Globals
 END=
@@ -296,6 +298,9 @@ main()
 {
 	process_options
 	if [[ -z $PLOTS ]]; then
+		wireless_atheros_set_no_accel_to_network
+		wireless_set_all_clients_minimum_txpower
+		wireless_802_11b_set_network
 		iterate_time_and_bandwidth
 	fi
 	generate_plots
