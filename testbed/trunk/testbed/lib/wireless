@@ -16,6 +16,8 @@ wireless_atheros_set_no_accel_to_network()
 
 wireless_set_all_clients_minimum_txpower()
 {
-	verbose "set on all clients txpower = 1dBm"
+	verbose "set on all clients txpower = ${WIRELESS_TXPOWER_MIN}dBm"
 	run_command_on_all_clients root "iwconfig ath0 txpower $WIRELESS_TXPOWER_MIN 2>/dev/null && echo -n set clients to txpower=${WIRELESS_TXPOWER_MIN} dBm"
+	verbose "set txpower = ${WIRELESS_TXPOWER_MIN}dBm on ap"
+	run_command_on_client root ap "iwpriv ath1 txpower $WIRELESS_TXPOWER_MIN 2>/dev/null && echo -n set ap to txpower=${WIRELESS_TXPOWER_MIN} dBm"
 }
