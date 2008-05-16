@@ -2,49 +2,29 @@
 TEMP_FILE=/tmp/hosts
 CLIENT_START=1
 CLIENT_END=16
+CLIENTS=$(seq $CLIENT_START $CLIENT_END)
 
-get_wired_hosts()
+scan_ssh_port_on_host_command()
 {
-	nmap -sP 192.168.1.* | grep Host | cut -d ' ' -f 2 > $TEMP_FILE
+	local host=$1
+	echo "nmap -P0 -p 22 $host" 
 }
 
-get_wireless_hosts()
+get_ssh_hosts()
 {
-	ssh root@ap "nmap -sP 192.168.2.*  | grep Host | cut -d ' ' -f 2" >> $TEMP_FILE
-}
-
-is_client_in_file()
-{
-	local file=$1
-	local client=$2
-
-	grep $client $file > /dev/null
-	return $?
-}
-
-print_client_if_not_up()
-{
-	local file=$1
-	local client=$2
-	is_client_in_file $file $client
-	if [[ $? > 0 ]]; then
-		echo $client
-	fi
+	for c in $CLIENTS
+	do
+		$(scan_ssh_port_on_host_command client$c) | grep -B 2 "filtered|closed" | grep Interesting | cut -d ' ' -f 4
+	done
+	ssh root@ap \
+		"$(scan_ssh_port_on_host_command wclient\{$(seq -s "," $CLIENT_START $CLIENT_END)\})" \
+		| grep -B 2 "filtered|closed" \
+		| grep Interesting \
+		| cut -d ' ' -f 4
 }
 
 main()
 {
-	get_wired_hosts
-	get_wireless_hosts
-	for i in `seq $CLIENT_START $CLIENT_END`
-	do
-		print_client_if_not_up $TEMP_FILE client$i
-		print_client_if_not_up $TEMP_FILE wclient$i
-	done
-	print_client_if_not_up $TEMP_FILE ap
-	print_client_if_not_up $TEMP_FILE src
-
-	# delete temp file
-	rm -f $TEMP_FILE
+	get_ssh_hosts
 }
 main
