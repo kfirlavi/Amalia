@@ -157,17 +157,15 @@ run_single_test()
 	get_client_state $dir
 	verbose "Running $t seconds test with $b bandwidth"
 	verbose "Running tcpdump on ap"
-	ssh root@ap "tcpdump -i ath1 -S -n -tt port 5001 > /tmp/ap.dump" &
+	ssh root@ap "tcpdump -i ath1 -S -n -tt port 5001 > /tmp/ap.dump" 2> /dev/null &
 	verbose "Running tcpdump on src"
-	ssh root@src "tcpdump -i eth0 -S -n -tt port 5001 > /tmp/src.dump" &
+	ssh root@src "tcpdump -i eth0 -S -n -tt port 5001 > /tmp/src.dump" 2> /dev/null &
 	sleep 3
 	for c in $CLIENTS
 	do 
 		verbose "Running iperf on client$c"
 		local tput_options="-o -s client$c -u src -d wsrc -t $t -b $b -v"
-		if [[ ! -z $first_run ]]; then
-			tput_options="$tput_options -k"
-		fi
+		[[ -n $first_run ]] && tput_options="$tput_options -k"
 		tput  $tput_options 2>&1 >> $dir/client${c} &
 		local pid=`echo $!`
 		pids="$pids $pid"
@@ -245,11 +243,11 @@ generate_data_file()
 	local input_data_directory=$2
 	for c in $CLIENTS
 	do
-		local tmp=`grep bits $input_data_directory/client$c | cut -d ']' -f 3`
-		local total=`echo $tmp | cut -d ' ' -f 3-4`
-		local bit_per_sec=`echo $tmp | cut -d ' ' -f 5-6`
-		bit_per_sec=`convert_mb_to_kb "$bit_per_sec"`
+		local tmp=`grep '%' $input_data_directory/client$c`
+		local total=`echo $tmp | cut -d ' ' -f 5-6`
+		local bit_per_sec=`echo $tmp | cut -d ' ' -f 7-8`
 		total=`convert_mb_to_kb "$total"`
+		bit_per_sec=`convert_mb_to_kb "$bit_per_sec"`
 		echo "$c $total $bit_per_sec" >> $data_file
 	done
 }
