@@ -1,13 +1,18 @@
 #!/bin/bash
 
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+source $LIB_PATH/opts
+source $LIB_PATH/iperf
+
 # Globals
-OPTS="$@"
 SRC_UTIL=
 DST_TEST=
 DST_UTIL=
 TIME=
 BANDWITH=
-VERBOSE= # no verbos
 
 usage()
 {
@@ -29,16 +34,6 @@ OPTIONS:
 	-h	Show this message
 	-v 	verbose
 EOF
-}
-
-check_for_no_opts()
-{
-	# exit if no arguments
-	if [[ -z $OPTS ]]
-	then 
-		usage
-		exit 1
-	fi
 }
 
 get_opts()
@@ -77,98 +72,6 @@ process_options()
 	check_for_required_opts
 }
 
-# gets string to output and optional options to echo (-n for example)
-verbose()
-{
-	local str=$1
-	local options=$2
-	if [[ -n $VERBOSE ]]; then
-		echo $options $str
-	fi
-}
-
-# gets number
-# if this number is zero, then it prints yes, else no
-print_yes_no()
-{
-	local val=$1
-	if [[ $val == 0 ]]; then
-		verbose "[Yes]"
-	else
-		verbose "[No]"
-	fi
-}
-
-# gets number for print_yes_no
-# check if verbos is on
-verbos_yes_no()
-{
-	if [[ -n $VERBOSE ]]; then
-		print_yes_no $1
-	fi
-}
-
-# gets host
-kill_iperf()
-{
-	local host=$1
-	is_iperf_running_on $host
-	local running=$?
-	while [[ $running == 0 ]]; do
-		verbose "Killing iperf..."
-		ssh root@$host "killall iperf"
-		is_iperf_running_on $host
-		running=$?
-	done
-}
-
-# gets host
-is_iperf_running_on()
-{
-	local host=$1
-	verbose "Checking if iperf is running on $host..." "-n"
-	ssh root@$host "ps fax | grep iperf | grep -v grep" > /dev/null
-	local ret=$?
-	verbos_yes_no $ret
-	return $ret
-}
-
-# gets host 
-is_iperf_listening()
-{
-	local host=$1
-	verbose "Checking if $host is listening..." "-n"
-	ssh root@$host "netstat -p | grep iperf" > /dev/null
-	local ret=$?
-	verbos_yes_no $ret
-	return $ret
-}
-
-# runs iperf sever on destination
-# gets destination utility address
-set_dest_iperf()
-{
-	local dst=$1
-	kill_iperf $dst
-	is_iperf_listening $dst
-	local listen=$?
-	while [[ $listen > 0 ]]; do
-		verbose "Setup iperf on $dst"
-		ssh root@$dst "iperf --udp --server --interval 1 --format m" > /tmp/$dst.iperf &
-		sleep 2
-		is_iperf_listening $dst
-		local listen=$?
-	done
-}
-
-# gets output
-get_loss_from_iperf_client_output()
-{
-	local output=$1
-	local loss=`echo $output | cut -d '(' -f 3 | cut -d '%' -f 1`
-	echo $loss
-}
-
 # find the max bandwidth
 # gets source utility address
 #      dest test address 
@@ -192,26 +95,6 @@ find_max_bandwidth()
 		fi
 	done
 }
-
-# runs iperf client on src
-# gets source utility address
-#      dest test address 
-#      time
-#      bandwidth
-run_iperf_client_once()
-{
-	local src=$1
-	local dst=$2
-	local time=$3
-	local bandwidth=$4
-	kill_iperf $src
-	verbose "Run iperf on $src -> $dst"
-	local ret=`ssh root@$src "iperf --udp --client $dst --time $time --bandwidth ${bandwidth}m"`
-	verbose "$ret"
-	local loss=`get_loss_from_iperf_client_output "$ret"`
-	verbose "iperf $src -> $dst time:$time bandwidth:${bandwidth}m loss:$loss"
-}
-
 
 main()
 {

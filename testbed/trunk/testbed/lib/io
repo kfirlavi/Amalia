@@ -80,3 +80,15 @@ check_directory()
 		exit 1
 	fi
 }
+
+# gets number
+# if this number is zero, then it prints yes, else no
+verbose_yes_no()
+{
+	local val=$1
+	if [[ $val == 0 ]]; then
+		verbose "[Yes]"
+	else
+		verbose "[No]"
+	fi
+}

@@ -1,0 +1,108 @@
+#!/bin/bash
+
+source $LIB_PATH/io
+source $LIB_PATH/remote
+
+# Globals
+
+
+# need to delete this function when find a solution to the >&2
+iperf_verbose()
+{
+	local str=$1
+	local options=$2
+	if [[ -n $VERBOSE ]]; then
+		echo $options "$str"
+	fi
+}
+# need to delete this function when find a solution to the >&2
+iperf_verbose_yes_no()
+{
+	local val=$1
+	if [[ $val == 0 ]]; then
+		iperf_verbose "[Yes]"
+	else
+		iperf_verbose "[No]"
+	fi
+}
+
+# gets host
+kill_iperf()
+{
+	local host=$1
+	is_iperf_running_on $host
+	local running=$?
+	while [[ $running == 0 ]]; do
+		iperf_verbose "Killing iperf..."
+		ssh root@$host "killall iperf"
+		is_iperf_running_on $host
+		running=$?
+	done
+}
+
+# gets host
+is_iperf_running_on()
+{
+	local host=$1
+	iperf_verbose "Checking if iperf is running on $host..." "-n"
+	ssh root@$host "ps fax | grep iperf | grep -v grep" > /dev/null
+	local ret=$?
+	iperf_verbose_yes_no $ret
+	return $ret
+}
+
+# gets host 
+is_iperf_listening()
+{
+	local host=$1
+	iperf_verbose "Checking if $host is listening..." "-n"
+	ssh root@$host "netstat -p | grep iperf" > /dev/null
+	local ret=$?
+	iperf_verbose_yes_no $ret
+	return $ret
+}
+
+# runs iperf sever on destination
+# gets destination utility address
+set_dest_iperf()
+{
+	local dst=$1
+	kill_iperf $dst
+	is_iperf_listening $dst
+	local listen=$?
+	while [[ $listen > 0 ]]; do
+		iperf_verbose "Setup iperf on $dst"
+		ssh root@$dst "iperf --udp --server --interval 1 --format m" > /tmp/$dst.iperf &
+		sleep 2
+		is_iperf_listening $dst
+		local listen=$?
+	done
+}
+
+# gets output
+get_loss_from_iperf_client_output()
+{
+	local output=$1
+	local loss=`echo $output | cut -d '(' -f 3 | cut -d '%' -f 1`
+	echo $loss
+}
+
+# runs iperf client on src
+# gets source utility address
+#      dest test address 
+#      time
+#      bandwidth
+run_iperf_client_once()
+{
+	local src=$1
+	local dst=$2
+	local time=$3
+	local bandwidth=$4
+	kill_iperf $src
+	iperf_verbose "Run iperf on $src -> $dst"
+	local ret=`ssh root@$src "iperf --udp --client $dst --time $time --bandwidth ${bandwidth}m"`
+	iperf_verbose "$ret"
+	local loss=`get_loss_from_iperf_client_output "$ret"`
+	iperf_verbose "iperf $src -> $dst time:$time bandwidth:${bandwidth}m loss:$loss"
+}
+
