@@ -9,7 +9,7 @@ run_command_on_client()
 	local host=$2
 	local command=$3
 	verbose "executing '$command' on client $host"
-	echo -e "$host $(ssh $user@$host "$command")"
+	verbose "$host $(ssh $user@$host "$command")" "-e"
 }
 
 copy_file_to_host()
