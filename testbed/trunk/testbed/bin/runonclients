@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+source $LIB_PATH/opts
+
+# Globals
+COMMAND=
+HOSTNAME_PREFIX=client
+
+usage()
+{
+	prog=`basename $0`
+	cat <<- EOF
+		usage: $prog [-n number] [-c range] [-v] command
+
+		Runs command on each client
+
+		EXAMPLE: $prog  -n 16 "command to run"
+			 $prog  -c 1,2,3 "command to run"
+
+		OPTIONS:
+			-n	number of clients to test together
+			-c	clients (just a list of clients eg. "3,16,7,9")
+			-h	Show this message
+			-v 	verbose
+			-x	debug
+		EOF
+}
+
+get_opts()
+{
+	while getopts "n:c:vhx" options; do
+		case $options in
+			n) END=$OPTARG;;
+			c) CLIENTS=`echo $OPTARG | tr ',' ' '`;;
+			v) VERBOSE=1;;
+			x) set -x; DEBUG=1;;
+			h) usage
+			   exit;;
+			*) usage
+			   exit 1;;
+		esac
+	done
+	((OPTIND--))
+	shift $OPTIND
+	COMMAND="$*"
+}
+
+check_for_required_opts()
+{
+	if [[ -z $COMMAND ]]
+	then 
+		usage
+		exit 1
+	fi
+}
+
+process_options()
+{
+	check_for_no_opts
+	get_opts $OPTS
+	check_for_required_opts
+	check_clients_opts
+	combine_clients_opts
+}
+
+run_command_on_client()
+{
+	local user=$1
+	local host=$2
+	local command=$3
+	verbose "executing '$command' on client $host"
+	echo -e "$host $(ssh $user@$host "$command")"
+}
+
+main()
+{
+	process_options
+
+	local pids=
+	for c in $CLIENTS
+	do
+		run_command_on_client "root" "$HOSTNAME_PREFIX$c" "$COMMAND" &
+		pids="$pids $(echo $!)"
+	done
+	# wait for jobs to finish
+	for p in $pids
+	do
+		verbose "waiting for command to finish - pid $p"
+		wait $p
+	done
+}
+main
