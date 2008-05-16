@@ -5,6 +5,7 @@ LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
 source $LIB_PATH/opts
+source $LIB_PATH/remote
 
 # Globals
 COMMAND=
@@ -67,30 +68,9 @@ process_options()
 	combine_clients_opts
 }
 
-run_command_on_client()
-{
-	local user=$1
-	local host=$2
-	local command=$3
-	verbose "executing '$command' on client $host"
-	echo -e "$host $(ssh $user@$host "$command")"
-}
-
 main()
 {
 	process_options
-
-	local pids=
-	for c in $CLIENTS
-	do
-		run_command_on_client "root" "$HOSTNAME_PREFIX$c" "$COMMAND" &
-		pids="$pids $(echo $!)"
-	done
-	# wait for jobs to finish
-	for p in $pids
-	do
-		verbose "waiting for command to finish - pid $p"
-		wait $p
-	done
+	run_command_on_all_clients "root" "$COMMAND"
 }
 main
