@@ -5,7 +5,7 @@ source $LIB_PATH/remote
 
 # Globals
 WIRELESS_ATHEROS_ABOLT=0
-WIRELESS_TXPOWER_MIN=1
+WIRELESS_TXPOWER_MIN=0
 
 wireless_atheros_set_no_accel_to_network()
 {
