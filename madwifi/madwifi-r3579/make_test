@@ -1,0 +1,30 @@
+rm -f test_drivers/ath_hal.ko
+echo "removing ath_hal.ko"
+rm -f test_drivers/wlan.ko
+echo "removing wlan.ko"
+rm -f test_drivers/ath_rate_*.ko
+echo "removing ath_rate * .ko"
+rm -f test_drivers/ath_pci.ko
+echo "removing ath_pci.ko"
+rm -f test_drivers/wlan_scan_*.ko
+echo "removing wlan_scan_*.ko"
+
+export EXTRAVERSION=-16-generic
+make modules
+
+cp ath_hal/ath_hal.ko test_drivers/
+echo "ath_hal.ko"
+cp net80211/wlan.ko test_drivers/
+echo "wlan.ko"
+cp ath_rate/amrr/ath_rate_amrr.ko test_drivers/
+echo "ath_rate_amrr.ko"
+cp ath_rate/sample/ath_rate_sample.ko test_drivers/
+echo "ath_rate_sample.ko"
+cp ath_rate/minstrel/ath_rate_minstrel.ko test_drivers/
+echo "ath_rate_minstrel.ko"
+cp ath/ath_pci.ko test_drivers/
+echo "ath_pci.ko"
+cp net80211/wlan_scan_sta.ko test_drivers/
+echo "wlan_scan_sta.ko"
+cp net80211/wlan_scan_ap.ko test_drivers/
+echo "wlan_scan_ap.ko"
