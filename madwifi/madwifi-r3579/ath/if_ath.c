@@ -8009,6 +8009,16 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni,
 		return -EIO;
 	}
 
+	//domenico
+	// added fragmented packets to a certain queue
+	if(txq != sc->sc_cabq){
+#ifdef IS_TIME
+        //ian
+        // use here if timing but no collision estimator, one queue 
+	         txq = sc->sc_ac2q[WME_AC_VO]; 
+	         bf->queue = WME_AC_VO;
+#endif
+    }
 
 #ifdef ATH_SUPERG_XR
 	if (vap->iv_flags & IEEE80211_F_XR) {
@@ -8225,6 +8235,11 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni,
 		return -EIO;
 	}
 	
+	//ian
+	// add TX interrupt request flag here
+#ifdef IS_TIME
+	flags |= HAL_TXDESC_INTREQ;
+#endif
 	DPRINTF(sc, ATH_DEBUG_XMIT, "Set up txdesc: pktlen %d hdrlen %d "
 		"atype %d txpower %d txrate %d try0 %d keyix %d ant %d flags %x "
 		"ctsrate %d ctsdur %d icvlen %d ivlen %d comp %d\n",
@@ -8368,6 +8383,15 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni,
 		return 0;
 	}
 
+//ian
+// looks like a good place to timestamp 
+#ifdef IS_TIME
+	if(txq != sc->sc_cabq){
+		bf->time_stamp = ath_hal_gettsf32(ah);
+		//bf->bf_id = ds->ds_txstat.ts_seqnum;
+		//bf->bf_id = txq->axq_totalqueued;
+	}
+#endif
 
 	ath_tx_txqaddbuf(sc, PASS_NODE(ni), txq, bf, pktlen);
 	return 0;
@@ -8390,6 +8414,10 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 	unsigned int sr, lr;
 	HAL_STATUS status;
 	int uapsdq = 0;
+	//ian
+#ifdef IS_TIME
+	u_int32_t temp_time_stamp;
+#endif
 
 	DPRINTF(sc, ATH_DEBUG_TX_PROC, "TX queue: %d (0x%x), link: %p\n", 
 		txq->axq_qnum, ath_hal_gettxbuf(sc->sc_ah, txq->axq_qnum),
@@ -8442,6 +8470,34 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 
 		ATH_TXQ_REMOVE_HEAD(txq, bf_list);
 		ATH_TXQ_UNLOCK_IRQ(txq);
+
+        //ian
+        //packet has actually been TX'ed here?
+        //code is status=ath_hal_txprocdesc() above
+        //lock released
+#ifdef IS_TIME
+
+		if(txq != sc->sc_cabq){
+            // ian
+            // lets timestamp now, printk later...
+		    temp_time_stamp = ath_hal_gettsf32(ah); //now
+			printk(KERN_DEBUG "%d\t%u\t%d\t%u\t%d\t%d\t%d\t%u\t%d\t%d\n",
+				ts->ts_seqnum,  // hardware seq #
+				temp_time_stamp, // current time
+				//ts->ts_tstamp, // u_int16_t
+				txq->axq_totalqueued, // ever queued
+				bf->time_stamp, // time added to tx queue
+				bf->bf_skb->len, // packet size
+				ts->ts_status, //success or failure
+				ts->ts_rate, //rate code
+				txq->axq_depth, //queue occupancy
+				ts->ts_longretry, // long retries (all)
+				//ds->ds_txstat.ts_shortretry
+				//ds->ds_txstat.ts_virtcol,
+				ts->ts_rssi //ack rssi
+			);
+		}
+#endif
 
 		ni = BF_NI(bf);
 		if (ni != NULL) {

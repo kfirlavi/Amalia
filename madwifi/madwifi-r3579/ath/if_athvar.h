@@ -456,6 +456,9 @@ struct ath_buf {
 #endif
 	int bf_taken_at_line; 				/* XXX: Want full alloc backtrace */
 	const char* bf_taken_at_func;			
+#ifdef IS_TIME                          // ian
+	u_int32_t time_stamp;				// timestamp
+#endif
 };
 
 /* XXX: only managed for rx at the moment */
