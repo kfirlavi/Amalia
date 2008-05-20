@@ -202,6 +202,9 @@ static inline struct net_device *_alloc_netdev(int sizeof_priv, const char *mask
 #define ATH_MAX_MTU     2290
 #define ATH_MIN_MTU     32
 
+// ian
+// RX and TX buffers
+
 /* number of RX buffers */
 #define ATH_RXBUF			100
 /* number of TX buffers */
@@ -232,7 +235,9 @@ static inline struct net_device *_alloc_netdev(int sizeof_priv, const char *mask
 #define	ATH_TXDESC	1		/* number of descriptors per buffer */
 #endif
 
-#define	ATH_TXMAXTRY	11		/* max number of transmit attempts */
+//domenico set it to 7
+// #define	ATH_TXMAXTRY	11		/* max number of transmit attempts */
+#define	ATH_TXMAXTRY	7		/* max number of transmit attempts */
 
 /* Compress settings */
 #define ATH_COMP_THRESHOLD  256         /* no compression for frames
@@ -423,7 +428,8 @@ struct ath_node {
 					 * tx to flip default recv
 					 * antenna
 					 */
-
+// ian
+// important structure, need to add to it
 struct ath_buf {
 	/* FFXXX: convert both list types to TAILQ to save a field? */
 	STAILQ_ENTRY(ath_buf) bf_list;
@@ -446,6 +452,7 @@ struct ath_buf {
 	u_int16_t bf_numdescff;				/* number of descs used for FF (these are extra) */
 	u_int32_t bf_queueage;				/* "age" of txq when this buffer placed on stageq */
 	dma_addr_t bf_skbaddrff[ATH_TXDESC - 1]; 	/* extra addrs for FF */
+	u_int8_t queue;                                 //domenico 
 #endif
 	int bf_taken_at_line; 				/* XXX: Want full alloc backtrace */
 	const char* bf_taken_at_func;			
@@ -606,6 +613,8 @@ struct ath_rp {
 	int       rp_analyzed;
 };
 
+//ian
+// added sysctl to control rate, in lieu of rate control algorithmn
 struct ath_softc {
 	struct ieee80211com sc_ic;		/* NB: must be first */
 	struct net_device *sc_dev;
@@ -671,6 +680,11 @@ struct ath_softc {
 						 */
 	unsigned int sc_txcont_power; /* Continuous transmit power in 0.5dBm units */
 	unsigned int sc_txcont_rate;  /* Continuous transmit rate in Mbps */
+
+	//ian
+#ifdef IS_FRATE
+	unsigned int sc_fixedrate;              /* rate to send packets at */
+#endif 
 
 	/* rate tables */
 	const HAL_RATE_TABLE *sc_rates[IEEE80211_MODE_MAX];

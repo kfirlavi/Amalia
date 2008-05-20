@@ -639,7 +639,11 @@ ath_attach(u_int16_t devid, struct net_device *dev, HAL_BUS_TAG tag)
 	 * support it will return true w/o doing anything.
 	 */
 	sc->sc_mrretry = ath_hal_setupxtxdesc(ah, NULL, 0,0, 0,0, 0,0);
-
+	// ian
+	// sysctl fixedrate stuff 11Mbps for starters
+#ifdef IS_FRATE
+	sc->sc_fixedrate = 11000;
+#endif
 	/*
 	 * Check if the device has hardware counters for PHY
 	 * errors.  If so we need to enable the MIB interrupt
@@ -2610,7 +2614,6 @@ ath_init(struct net_device *dev)
 		  | HAL_INT_RXEOL | HAL_INT_RXORN
 		  | HAL_INT_FATAL | HAL_INT_GLOBAL
 		  | (sc->sc_needmib ? HAL_INT_MIB : 0);
-
 	/* Push changes to sc_imask to hardware */
 	ath_hal_intrset(ah, sc->sc_imask);
 
@@ -6404,9 +6407,22 @@ ath_rxbuf_init(struct ath_softc *sc, struct ath_buf *bf)
 	ds = bf->bf_desc;
 	ds->ds_link = bf->bf_daddr;		/* link to self */
 	ds->ds_data = bf->bf_skbaddr;
+//ian
+// only get rx interupt for PCs, less work for boxes
+// check domenicos code?
+// do we need this? Not for TX stuff...
+//#ifndef IS_PC
 	ath_hal_setuprxdesc(ah, ds,
 		skb_tailroom(bf->bf_skb),	/* buffer size */
 		0);
+//#endif
+//#ifdef IS_PC
+//	ath_hal_setuprxdesc(ah, ds,
+//		skb_tailroom(bf->bf_skb),              /* buffer size */
+//		HAL_RXDESC_INTREQ);
+//#endif
+
+
 	if (sc->sc_rxlink != NULL)
 		*sc->sc_rxlink = bf->bf_daddr;
 	sc->sc_rxlink = &ds->ds_link;
@@ -6729,8 +6745,32 @@ rx_accept:
 		 * allocated when the rx descriptor is setup again
 		 * to receive another frame.
 		 */
+		//domenico
+		//here we collect the info
+                // len = ds->ds_rxstat.rs_datalen;
 		bus_dma_sync_single(sc->sc_bdev,
 			bf->bf_skbaddr, len, BUS_DMA_FROMDEVICE);
+
+		// missing a bus_unmap_single() here since r2xxx
+ 
+                //printk(KERN_INFO "MSR R,SNR:%2d,time:%06lu.%06lu,N:%2d\n", ds->ds_rxstat.rs_rssi, tv.tv_sec, tv.tv_usec, ic->ic_channoise);
+               // ian
+               // here for channel sense stuff, changed struct from original (above)
+                // printk(KERN_DEBUG "MSR R,SNR:%2d,time:%06lu.%06lu,N:%2d\n", bf->bf_dsstatus.ds_rxstat.rs_rssi, tv.tv_sec, tv.tv_usec, ic->ic_channoise);
+ 
+                // need to update new counters
+                // not used in version of code from domenico...
+                /* 
+                wh = (struct ieee80211_frame *)bf->bf_skb->data;
+                type = wh->i_fc[0] & IEEE80211_FC0_TYPE_MASK;
+                subtype = wh->i_fc[0] & IEEE80211_FC0_SUBTYPE_MASK;
+                if (type==IEEE80211_FC0_TYPE_CTL){ 
+                        if( (subtype==IEEE80211_FC0_SUBTYPE_CTS) && (IEEE80211_ADDR_EQ(wh->i_addr1, ic->ic_myaddr)) ) {
+                        sc->sc_stats.ast_rx_cts++;}
+                        else if( (subtype==IEEE80211_FC0_SUBTYPE_ACK) && (IEEE80211_ADDR_EQ(wh->i_addr1, ic->ic_myaddr)) ){
+                        sc->sc_stats.ast_rx_ack++;}
+                }
+                */
 
 		sc->sc_stats.ast_ant_rx[rs->rs_antenna]++;
 		sc->sc_devstats.rx_packets++;
@@ -7708,7 +7748,9 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni,
 	struct ath_desc *ds = NULL;
 	struct ath_txq *txq = NULL;
 	struct ieee80211_frame *wh;
-	u_int subtype, flags, ctsduration;
+	// domenico
+	// added '=0' to subtype
+	u_int subtype=0, flags, ctsduration;
 	HAL_PKT_TYPE atype;
 	const HAL_RATE_TABLE *rt;
 	HAL_BOOL shortPreamble;
@@ -7846,14 +7888,22 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni,
 	 * use short preamble based on the current mode and
 	 * negotiated parameters.
 	 */
+	
 	if ((ic->ic_flags & IEEE80211_F_SHPREAMBLE) &&
 	    (ni->ni_capinfo & IEEE80211_CAPINFO_SHORT_PREAMBLE)) {
 		shortPreamble = AH_TRUE;
 		sc->sc_stats.ast_tx_shortpre++;
 	} else
+	// ian
+	// only use long preambles
+	// leave this in fixedrate for now
+#ifdef IS_FRATE
 		shortPreamble = AH_FALSE;
-
-	an = ATH_NODE(ni);
+#endif
+    
+	shortPreamble = AH_FALSE;
+	
+    an = ATH_NODE(ni);
 	flags = HAL_TXDESC_CLRDMASK;		/* XXX needed for crypto errs */
 	/*
 	 * Calculate Atheros packet type from IEEE80211 packet header,
@@ -7914,9 +7964,19 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni,
 			/*
 			 * Data frames; consult the rate control module.
 			 */
-			sc->sc_rc->ops->findrate(sc, an, shortPreamble, skb->len,
+			//ian
+#ifndef IS_FRATE		
+            sc->sc_rc->ops->findrate(sc, an, shortPreamble, skb->len,
 				&rix, &try0, &txrate);
+#endif
+			//lets not, using sysctl stuff instead
+#ifdef IS_FRATE
+			rix = ath_tx_findindex(rt, sc->sc_fixedrate);
+			txrate = rt->info[rix].rateCode;
 
+			// no multirate retries when try0==ATH_TXMAXTRY
+			try0 = ATH_TXMAXTRY;
+#endif
 			/* Ratecontrol sometimes returns invalid rate index */
 			if (rix != 0xff)
 				an->an_prevdatarix = rix;
@@ -7948,6 +8008,7 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni,
 		/* XXX statistic */
 		return -EIO;
 	}
+
 
 #ifdef ATH_SUPERG_XR
 	if (vap->iv_flags & IEEE80211_F_XR) {
@@ -8307,6 +8368,7 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni,
 		return 0;
 	}
 
+
 	ath_tx_txqaddbuf(sc, PASS_NODE(ni), txq, bf, pktlen);
 	return 0;
 #undef MIN
@@ -8355,6 +8417,8 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 #else
 		ds = bf->bf_desc;		/* NB: last descriptor */
 #endif
+        // ian
+        // looks like here the packet is sent to the HAL
 		ts = &bf->bf_dsstatus.ds_txstat;
 		status = ath_hal_txprocdesc(ah, ds, ts);
 #ifdef AR_DEBUG
@@ -8381,6 +8445,8 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 
 		ni = BF_NI(bf);
 		if (ni != NULL) {
+		//domenico
+		// adding main stats counters here
 			an = ATH_NODE(ni);
 			if (ts->ts_status == 0) {
 				u_int8_t txant = ts->ts_antenna;
@@ -8422,7 +8488,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 					sc->sc_stats.ast_tx_fifoerr++;
 				if (ts->ts_status & HAL_TXERR_FILT)
 					sc->sc_stats.ast_tx_filtered++;
-			}
+            } 
 			sr = ts->ts_shortretry;
 			lr = ts->ts_longretry;
 			sc->sc_stats.ast_tx_shortretry += sr;
@@ -8438,6 +8504,8 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 				sc->sc_rc->ops->tx_complete(sc, an, bf);
 		}
 
+
+        // looks like buffer being removed here
 		bus_unmap_single(sc->sc_bdev, bf->bf_skbaddr,
 				 bf->bf_skb->len, BUS_DMA_TODEVICE);
 		bf->bf_skbaddr = 0;
@@ -10749,6 +10817,9 @@ enum {
 	ATH_MAXVAPS  		= 26,
         ATH_INTMIT 		= 27,
 	ATH_DISTANCE		= 28,
+#ifdef IS_FRATE
+	ATH_FIXEDRATE		= 29, // ian - was 23 in old driver...
+#endif
 };
 
 static inline int 
@@ -11066,6 +11137,12 @@ ATH_SYSCTL_DECL(ath_sysctl_halparam, ctl, write, filp, buffer, lenp, ppos)
 				 * settings. */
 				ath_override_intmit_if_disabled(sc);
                                 break; 
+			// ian
+#ifdef IS_FRATE
+			case ATH_FIXEDRATE:
+				sc->sc_fixedrate = val;
+				break;
+#endif
 			default:
 				ret = -EINVAL;
 				break;
@@ -11138,7 +11215,13 @@ ATH_SYSCTL_DECL(ath_sysctl_halparam, ctl, write, filp, buffer, lenp, ppos)
                 case ATH_INTMIT: 
 			val = sc->sc_useintmit; 
 			break; 
-	       	default:
+		//ian
+#ifdef IS_FRATE
+		case ATH_FIXEDRATE:
+			val = sc->sc_fixedrate;
+			break;
+#endif
+	    default:
 			ret = -EINVAL;
 			break;
 		}
@@ -11324,6 +11407,14 @@ static const ctl_table ath_sysctl_template[] = {
 	  .proc_handler = ath_sysctl_halparam, 
 	  .extra2       = (void *)ATH_INTMIT, 
 	}, 
+#ifdef IS_FRATE
+ 	{ .ctl_name     = CTL_AUTO,  //ian
+	  .procname     = "fixedrate",
+	  .mode         = 0644,
+	  .proc_handler = ath_sysctl_halparam,
+	  .extra2       = (void *)ATH_FIXEDRATE, 
+	},
+#endif
 	{ 0 }
 };
 
