@@ -81,14 +81,13 @@ else
 	$(MAKE) -C $(KERNELPATH) FRFLAG=1 TIMEFLAG=1 SUBDIRS=$(shell pwd) modules
 endif
 
-
 modules: configcheck svnversion.h
 ifdef LINUX24
 	for i in $(obj-y); do \
 		$(MAKE) -C $$i || exit 1; \
 	done
 else
-	$(MAKE) -C $(KERNELPATH) SUBDIRS=$(shell pwd) modules 
+	$(MAKE) -C $(KERNELPATH) SUBDIRS=$(shell pwd) modules
 endif
 
 .PHONY: svnversion.h
