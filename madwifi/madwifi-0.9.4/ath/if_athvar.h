@@ -396,6 +396,9 @@ struct ath_buf {
 	u_int32_t bf_queueage; 			/* "age" of txq when this buffer placed on stageq */
 	dma_addr_t bf_skbaddrff[ATH_TXDESC-1]; 	/* extra addrs for ff */
 #endif
+#ifdef IS_TIME
+	u_int32_t time_stamp;				// timestamp
+#endif /* IS_TIME */
 };
 
 /*

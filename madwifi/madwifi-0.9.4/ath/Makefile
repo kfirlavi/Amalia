@@ -67,6 +67,9 @@ EXTRA_CFLAGS+= $(INCS) $(COPTS) -DOPT_AH_H=\"$(HAL)/public/$(TARGET).opt_ah.h\"
 ifeq (${FRFLAG},1)
 EXTRA_CFLAGS+= -DIS_FRATE
 endif
+ifeq (${TIMEFLAG},1)
+EXTRA_CFLAGS+= -DIS_TIME
+endif
 
 -include $(TOPDIR)/Rules.make
 

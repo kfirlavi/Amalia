@@ -6927,6 +6927,14 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 		return -EIO;
 	}
 
+#ifdef IS_TIME
+	if(txq != sc->sc_cabq){
+		/* puts all data packets on the same queue */
+		txq = sc->sc_ac2q[WME_AC_VO]; 
+		bf->queue = WME_AC_VO;
+    	}
+#endif /* IS_TIME */
+
 #ifdef ATH_SUPERG_XR 
 	if (vap->iv_flags & IEEE80211_F_XR ) {
 		txq = sc->sc_xrtxq;
@@ -7144,6 +7152,11 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 		return -EIO;
 	}
 
+#ifdef IS_TIME
+	/* add TX interrupt request flag here */
+	flags |= HAL_TXDESC_INTREQ;
+#endif /* IS_TIME */
+
 	DPRINTF(sc, ATH_DEBUG_XMIT, "%s: set up txdesc: pktlen %d hdrlen %d "
 		"atype %d txpower %d txrate %d try0 %d keyix %d ant %d flags %x "
 		"ctsrate %d ctsdur %d icvlen %d ivlen %d comp %d\n",
@@ -7269,6 +7282,12 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 		__func__, vap->iv_bss, ether_sprintf(vap->iv_bss->ni_macaddr),
 		ieee80211_node_refcnt(vap->iv_bss));
 
+#ifdef IS_TIME
+	/* time stamp before a packet added to the queue */
+	if(txq != sc->sc_cabq){
+		bf->time_stamp = ath_hal_gettsf32(ah);
+	}
+#endif /* IS_TIME */
 
 	ath_tx_txqaddbuf(sc, ni, txq, bf, ds, pktlen);
 	return 0;
@@ -7291,6 +7310,9 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 	HAL_STATUS status;
 	int uapsdq = 0;
 	unsigned long uapsdq_lockflags = 0;
+#ifdef IS_TIME
+	u_int32_t timestamp_after_ack;
+#endif /* IS_TIME */
 
 	DPRINTF(sc, ATH_DEBUG_TX_PROC, "%s: tx queue %d (0x%x), link %p\n", __func__,
 		txq->axq_qnum, ath_hal_gettxbuf(sc->sc_ah, txq->axq_qnum),
@@ -7342,6 +7364,28 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			ATH_TXQ_UAPSDQ_UNLOCK_IRQ(txq);
 		else
 			ATH_TXQ_UNLOCK(txq);
+
+#ifdef IS_TIME
+		/* get current time and print stats */
+		if(txq != sc->sc_cabq){
+			timestamp_after_ack = ath_hal_gettsf32(ah); //now
+			printk(KERN_DEBUG "%d\t%u\t%d\t%u\t%d\t%d\t%d\t%u\t%d\t%d\n",
+				ts->ts_seqnum,  // hardware seq #
+				timestamp_after_ack, // current time
+				//ts->ts_tstamp, // u_int16_t
+				txq->axq_totalqueued, // ever queued
+				bf->time_stamp, // time added to tx queue
+				bf->bf_skb->len, // packet size
+				ts->ts_status, //success or failure
+				ts->ts_rate, //rate code
+				txq->axq_depth, //queue occupancy
+				ts->ts_longretry, // long retries (all)
+				//ds->ds_txstat.ts_shortretry
+				//ds->ds_txstat.ts_virtcol,
+				ts->ts_rssi //ack rssi
+			);
+		}
+#endif /* IS_TIME */
 
 		ni = bf->bf_node;
 		if (ni != NULL) {

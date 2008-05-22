@@ -62,6 +62,24 @@ ifdef LINUX24
 else
 	$(MAKE) -C $(KERNELPATH) FRFLAG=1 SUBDIRS=$(shell pwd) modules
 endif
+TIMING: configcheck svnversion.h
+ifdef LINUX24
+	for i in $(obj-y); do \
+		$(MAKE) -C $$i TIMEFLAG=1 || exit 1; \
+	done
+else
+	$(MAKE) -C $(KERNELPATH) TIMEFLAG=1 SUBDIRS=$(shell pwd) modules
+endif
+
+TF: configcheck svnversion.h
+ifdef LINUX24
+	for i in $(obj-y); do \
+		$(MAKE) -C $$i FRFLAG=1 TIMEFLAG=1 || exit 1; \
+	done
+else
+	$(MAKE) -C $(KERNELPATH) FRFLAG=1 TIMEFLAG=1 SUBDIRS=$(shell pwd) modules
+endif
+
 modules: configcheck svnversion.h
 ifdef LINUX24
 	for i in $(obj-y); do \
