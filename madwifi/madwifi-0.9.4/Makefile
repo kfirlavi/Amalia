@@ -54,6 +54,14 @@ obj-y := ath/ ath_hal/ ath_rate/ net80211/
 
 all: modules tools
 
+FIXEDRATE: configcheck svnversion.h
+ifdef LINUX24
+	for i in $(obj-y); do \
+		$(MAKE) -C $$i FRFLAG=1 || exit 1; \
+	done
+else
+	$(MAKE) -C $(KERNELPATH) FRFLAG=1 SUBDIRS=$(shell pwd) modules
+endif
 modules: configcheck svnversion.h
 ifdef LINUX24
 	for i in $(obj-y); do \

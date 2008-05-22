@@ -63,6 +63,11 @@ INCS += -I$(TOP) -I$(ATH_HAL) -I$(HAL) -I$(WLAN)
 
 EXTRA_CFLAGS+= $(INCS) $(COPTS) -DOPT_AH_H=\"$(HAL)/public/$(TARGET).opt_ah.h\"
 
+#IS_FRATE
+ifeq (${FRFLAG},1)
+EXTRA_CFLAGS+= -DIS_FRATE
+endif
+
 -include $(TOPDIR)/Rules.make
 
 all:

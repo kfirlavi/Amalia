@@ -577,6 +577,9 @@ struct ath_softc {
 	unsigned int	sc_ackrate:1;		/* send acks at high bitrate */
 	unsigned int	sc_hasintmit:1;		/* Has interference mitigation */
 	unsigned int	sc_useintmit:1;		/* Use interference mitigation (ANI) */
+#ifdef IS_FRATE
+	unsigned int sc_fixedrate;              /* rate to send packets at */
+#endif 
 
 	/* rate tables */
 	const HAL_RATE_TABLE *sc_rates[IEEE80211_MODE_MAX];

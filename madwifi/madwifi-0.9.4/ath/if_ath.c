@@ -466,7 +466,10 @@ ath_attach(u_int16_t devid, struct net_device *dev, HAL_BUS_TAG tag)
 	 * support it will return true w/o doing anything.
 	 */
 	sc->sc_mrretry = ath_hal_setupxtxdesc(ah, NULL, 0,0, 0,0, 0,0);
-
+#ifdef IS_FRATE
+	/* sysctl fixedrate stuff 11Mbps for starters */
+	sc->sc_fixedrate = 11000;
+#endif /* IS_FRATE */
 	/*
 	 * Check if the device has hardware counters for PHY
 	 * errors.  If so we need to enable the MIB interrupt
@@ -6809,6 +6812,13 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 		sc->sc_stats.ast_tx_shortpre++;
 	} else
 		shortPreamble = AH_FALSE;
+#ifdef IS_FRATE
+          /* only use long preambles
+             leave this in fixedrate for now
+          */
+          shortPreamble = AH_FALSE;
+#endif /* IS_FRATE */
+
 
 	an = ATH_NODE(ni);
 	flags = HAL_TXDESC_CLRDMASK;		/* XXX needed for crypto errs */
@@ -6871,8 +6881,19 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 			/*
 			 * Data frames; consult the rate control module.
 			 */
+#ifndef IS_FRATE		
+			/* when fixed rate is on, we don't need to find the rate */
 			sc->sc_rc->ops->findrate(sc, an, shortPreamble, skb->len,
 				&rix, &try0, &txrate);
+#endif /* IS_FRATE */
+#ifdef IS_FRATE
+			/* get the rate from sysctl, or /proc/sys */
+			rix = ath_tx_findindex(rt, sc->sc_fixedrate);
+			txrate = rt->info[rix].rateCode;
+
+			/* no multirate retries when try0==ATH_TXMAXTRY */
+			try0 = ATH_TXMAXTRY;
+#endif /* IS_FRATE */
 
 			/* Ratecontrol sometimes returns invalid rate index */
 			if (rix != 0xff)
@@ -9354,6 +9375,9 @@ enum {
 	ATH_ACKRATE		= 22,
 	ATH_INTMIT		= 23,
 	ATH_MAXVAPS		= 26,
+#ifdef IS_FRATE
+	ATH_FIXEDRATE		= 27, 
+#endif /* IS_FRATE */
 };
 
 static int
@@ -9491,6 +9515,11 @@ ATH_SYSCTL_DECL(ath_sysctl_halparam, ctl, write, filp, buffer, lenp, ppos)
 				    !sc->sc_invalid)
 					ath_reset(sc->sc_dev);
 				break;
+#ifdef IS_FRATE
+			case ATH_FIXEDRATE:
+				sc->sc_fixedrate = val;
+				break;
+#endif /* IS_FRATE */
 			default:
 				return -EINVAL;
 			}
@@ -9556,6 +9585,11 @@ ATH_SYSCTL_DECL(ath_sysctl_halparam, ctl, write, filp, buffer, lenp, ppos)
 		case ATH_INTMIT:
 			val = sc->sc_useintmit;
 			break;
+#ifdef IS_FRATE
+		case ATH_FIXEDRATE:
+			val = sc->sc_fixedrate;
+			break;
+#endif /* IS_FRATE */
 		default:
 			return -EINVAL;
 		}
@@ -9686,6 +9720,14 @@ static const ctl_table ath_sysctl_template[] = {
 	  .proc_handler	= ath_sysctl_halparam,
 	  .extra2	= (void *)ATH_INTMIT,
 	},
+#ifdef IS_FRATE
+ 	{ .ctl_name     = CTL_AUTO,  //ian
+	  .procname     = "fixedrate",
+	  .mode         = 0644,
+	  .proc_handler = ath_sysctl_halparam,
+	  .extra2       = (void *)ATH_FIXEDRATE, 
+	},
+#endif /* IS_FRATE */
 	{ 0 }
 };
 
