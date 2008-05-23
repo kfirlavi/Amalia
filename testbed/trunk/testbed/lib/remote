@@ -21,6 +21,23 @@ copy_file_to_host()
 	verbose "$(scp $file $user@$host:/tmp)"
 }
 
+copy_file_from_host()
+{
+	local user=$1
+	local host=$2
+	local src=$3
+	local dst=$4
+	verbose "copying file $user@$host:$src to $dst"
+	verbose "$(scp $file $user@$host:$src $dst)"
+}
+
+delete_file_on_host()
+{
+	local host=$1
+	local file=$2
+	verbose $(ssh root@$host "rm -f $file" > /dev/null)
+}
+
 run_command_on_all_clients()
 {
 	local user=$1

@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/remote
+
+# Globals
+MADWIFI_TIMING_DUMPFILE_DIR="/tmp"
+MADWIFI_TIMING_DUMPFILE_SUFFIX=".madwifi.timing.dump"
+
+madwifi_start_timing_logging()
+{
+	local host=$1
+	local dumpfile=$MADWIFI_TIMING_DUMPFILE_DIR/$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
+	verbose "Collecting madwifi timing data on $host"
+	ssh root@$host "cat /proc/kmsg > $dumpfile" 2> /dev/null &
+}
+
+madwifi_stop_timing_logging()
+{
+	local host=$1
+	verbose "kill madwifi timing logging on $host"
+	ssh root@$host "kill \$(ps fax | grep '/proc/kmsg'  | sed 's/^ //' | cut -d ' ' -f 1)"
+}
+
+madwifi_move_timing_dumpfile()
+{
+	local host=$1
+	local destdir=$2
+	local filename=$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
+	local src=$MADWIFI_TIMING_DUMPFILE_DIR/$filename
+	local dst=$destdir/$filename
+	copy_file_from_host root $host $src $dst
+	delete_file_on_host $host $src
+}

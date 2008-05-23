@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/remote
+
 # Globals
 TCPDUMP_THROUGHPUT_IN_TIME_START=0
 TCPDUMP_THROUGHPUT_IN_TIME_THROUGHPUT_PLOTS_DURATION=20
@@ -331,13 +336,13 @@ tcpdump_stop_logging()
 	ssh root@$host "killall tcpdump"
 }
 
-tcpdump_copy_dumpfile()
+tcpdump_move_dumpfile()
 {
 	local host=$1
 	local destdir=$2
 	local filename=$host$TCPDUMP_CLIENTS_DUMPFILE_SUFFIX
 	local src=$TCPDUMP_CLIENTS_DUMPFILE_DIRECTORY/$filename
 	local dst=$destdir/$filename
-	verbose "copying dump file from $host:$src to $dst"
-	scp root@$host:$src $dst
+	copy_file_from_host root $host $src $dst
+	delete_file_on_host $host $src
 }

@@ -8,6 +8,7 @@ source $LIB_PATH/opts
 source $LIB_PATH/tcpdump
 source $LIB_PATH/802.11b
 source $LIB_PATH/wireless
+source $LIB_PATH/madwifi
 
 # Globals
 END=
@@ -122,6 +123,24 @@ get_client_state()
 	wait_for_pids $pids
 }
 
+start_logging()
+{
+	tcpdump_start_logging ap ath1 $IPERF_PORT
+	tcpdump_start_logging src eth0 $IPERF_PORT
+	madwifi_start_timing_logging ap
+}
+
+end_logging()
+{
+	for srv in ap src
+	do
+		tcpdump_stop_logging $srv
+		tcpdump_move_dumpfile $srv $dir
+		[[ $srv == "ap" ]] && madwifi_stop_timing_logging $srv
+		[[ $srv == "ap" ]] && madwifi_move_timing_dumpfile $srv $dir
+	done
+}
+
 run_single_test()
 {
 	local t=$1
@@ -132,10 +151,7 @@ run_single_test()
 	local dir=`make_results_dir $t $b`
 	get_client_state $dir
 	verbose "Running $t seconds test with $b bandwidth"
-	set -x 
-	tcpdump_start_logging ap ath1 $IPERF_PORT
-	tcpdump_start_logging src eth0 $IPERF_PORT
-	unset -x 
+	start_logging
 	sleep 3
 	for c in $CLIENTS
 	do 
@@ -147,12 +163,7 @@ run_single_test()
 		first_run=1
 	done
 	wait_for_pids $pids
-
-	for srv in ap src
-	do
-		tcpdump_stop_logging $srv
-		tcpdump_copy_dumpfile $srv $dir
-	done
+	end_logging
 }
 
 iterate_time_and_bandwidth()

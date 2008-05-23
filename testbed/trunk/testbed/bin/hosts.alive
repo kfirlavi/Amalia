@@ -1,5 +1,11 @@
 #!/bin/bash
-TEMP_FILE=/tmp/hosts
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+
+# Globals
 CLIENT_START=1
 CLIENT_END=16
 CLIENTS=$(seq $CLIENT_START $CLIENT_END)
@@ -12,15 +18,23 @@ scan_ssh_port_on_host_command()
 
 get_ssh_hosts()
 {
+	local pids=""
 	for c in $CLIENTS
 	do
-		$(scan_ssh_port_on_host_command client$c) | grep -B 2 "filtered|closed" | grep Interesting | cut -d ' ' -f 4
+		$(scan_ssh_port_on_host_command client$c) \
+			| tee -a /tmp/hosts.alive.log \
+			| egrep -B 2 "filtered|closed" \
+			| grep Interesting \
+			| cut -d ' ' -f 4 &
+		pids="$pids $!"
 	done
 	ssh root@ap \
 		"$(scan_ssh_port_on_host_command wclient\{$(seq -s "," $CLIENT_START $CLIENT_END)\})" \
 		| grep -B 2 "filtered|closed" \
 		| grep Interesting \
-		| cut -d ' ' -f 4
+		| cut -d ' ' -f 4 
+
+	wait_for_pids $pids
 }
 
 main()
