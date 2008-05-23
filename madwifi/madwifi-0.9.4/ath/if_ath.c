@@ -6931,7 +6931,6 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 	if(txq != sc->sc_cabq){
 		/* puts all data packets on the same queue */
 		txq = sc->sc_ac2q[WME_AC_VO]; 
-		bf->queue = WME_AC_VO;
     	}
 #endif /* IS_TIME */
 
@@ -7367,22 +7366,24 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 
 #ifdef IS_TIME
 		/* get current time and print stats */
+        /* ts structure not used in the 0.9.4 (stable) so use
+           ds->ds_us.tx. which points at the same place */
 		if(txq != sc->sc_cabq){
 			timestamp_after_ack = ath_hal_gettsf32(ah); //now
 			printk(KERN_DEBUG "%d\t%u\t%d\t%u\t%d\t%d\t%d\t%u\t%d\t%d\n",
-				ts->ts_seqnum,  // hardware seq #
+				ds->ds_us.tx.ts_seqnum,  // hardware seq #
 				timestamp_after_ack, // current time
 				//ts->ts_tstamp, // u_int16_t
 				txq->axq_totalqueued, // ever queued
 				bf->time_stamp, // time added to tx queue
 				bf->bf_skb->len, // packet size
-				ts->ts_status, //success or failure
-				ts->ts_rate, //rate code
+				ds->ds_us.tx.ts_status, //success or failure
+				ds->ds_us.tx.ts_rate, //rate code
 				txq->axq_depth, //queue occupancy
-				ts->ts_longretry, // long retries (all)
+				ds->ds_us.tx.ts_longretry, // long retries (all)
 				//ds->ds_txstat.ts_shortretry
 				//ds->ds_txstat.ts_virtcol,
-				ts->ts_rssi //ack rssi
+				ds->ds_us.tx.ts_rssi //ack rssi
 			);
 		}
 #endif /* IS_TIME */
