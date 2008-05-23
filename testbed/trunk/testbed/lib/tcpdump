@@ -10,6 +10,8 @@ THROUGHPUT_PLOTS_DURATION=60
 MAX_PACKETS_SEND=0
 #PNG_SIZE="1024,768"
 PNG_SIZE="400,300"
+TCPDUMP_CLIENTS_DUMPFILE_DIRECTORY="/tmp"
+TCPDUMP_CLIENTS_DUMPFILE_SUFFIX=".dump"
 
 # will search the tcpdump file for the time that the last station started to send
 # then we can consider the experiment as started
@@ -312,3 +314,30 @@ generate_tcpdump_plots()
 	release_temp_file $throuput_plots_data
 }
 
+tcpdump_start_logging()
+{
+	local host=$1
+	local interface=$2 # eth1,ath0...
+	local port=$3
+	local dumpfile=$TCPDUMP_CLIENTS_DUMPFILE_DIRECTORY/$host$TCPDUMP_CLIENTS_DUMPFILE_SUFFIX
+	verbose "Running tcpdump on $host"
+	ssh root@$host "tcpdump -i $interface -S -n -tt port $port > $dumpfile" 2> /dev/null &
+}
+
+tcpdump_stop_logging()
+{
+	local host=$1
+	verbose "kill tcpdump on $host"
+	ssh root@$host "killall tcpdump"
+}
+
+tcpdump_copy_dumpfile()
+{
+	local host=$1
+	local destdir=$2
+	local filename=$host$TCPDUMP_CLIENTS_DUMPFILE_SUFFIX
+	local src=$TCPDUMP_CLIENTS_DUMPFILE_DIRECTORY/$filename
+	local dst=$destdir/$filename
+	verbose "copying dump file from $host:$src to $dst"
+	scp root@$host:$src $dst
+}

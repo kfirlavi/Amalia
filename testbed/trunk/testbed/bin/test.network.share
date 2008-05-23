@@ -104,24 +104,6 @@ make_results_dir()
 	create_directory $dir
 }
 
-wait_for_pids_to_finish()
-{
-	local pids=$1
-	for p in $pids 
-	do 
-		verbose "Waiting for pid $p"
-		local flag=
-		while [[ -z $flag ]]; do
-			local ret=`ps fax | grep $p | grep -v grep `
-			if [[ $? == 0 ]]; then 
-				flag=1
-			else
-				sleep 1
-			fi
-		done
-	done
-}
-
 # save the state information of the client
 get_client_state()
 {
@@ -134,16 +116,10 @@ get_client_state()
 	do 
 		verbose "Getting client$c state data"
 		ssh root@client$c "ifconfig 2>/dev/null ; iwconfig 2>/dev/null ; iwpriv ath0 2>/dev/null" > $state_dir/client$c.state &
-		local pid=`echo $!`
-		pids="$pids $pid"
+		pids="$pids $!"
 	done
 
-	# wait for jobs to finish
-	for p in $pids
-	do
-		verbose "waiting for client state to arrive - pid $p"
-		wait $p
-	done
+	wait_for_pids $pids
 }
 
 run_single_test()
@@ -156,10 +132,10 @@ run_single_test()
 	local dir=`make_results_dir $t $b`
 	get_client_state $dir
 	verbose "Running $t seconds test with $b bandwidth"
-	verbose "Running tcpdump on ap"
-	ssh root@ap "tcpdump -i ath1 -S -n -tt port 5001 > /tmp/ap.dump" 2> /dev/null &
-	verbose "Running tcpdump on src"
-	ssh root@src "tcpdump -i eth0 -S -n -tt port 5001 > /tmp/src.dump" 2> /dev/null &
+	set -x 
+	tcpdump_start_logging ap ath1 $IPERF_PORT
+	tcpdump_start_logging src eth0 $IPERF_PORT
+	unset -x 
 	sleep 3
 	for c in $CLIENTS
 	do 
@@ -167,23 +143,16 @@ run_single_test()
 		local tput_options="-o -s client$c -u src -d wsrc -t $t -b $b -v"
 		[[ -n $first_run ]] && tput_options="$tput_options -k"
 		tput  $tput_options 2>&1 >> $dir/client${c} &
-		local pid=`echo $!`
-		pids="$pids $pid"
+		pids="$pids $!"
 		first_run=1
 	done
+	wait_for_pids $pids
 
-	# wait for jobs to finish
-	for p in $pids
+	for srv in ap src
 	do
-		verbose "waiting for pid $p to finish"
-		wait $p
+		tcpdump_stop_logging $srv
+		tcpdump_copy_dumpfile $srv $dir
 	done
-	verbose "kill tcpdump on ap"
-	ssh root@ap "killall tcpdump"
-	scp root@ap:/tmp/ap.dump $dir/ap.dump
-	verbose "kill tcpdump on src"
-	ssh root@src "killall tcpdump"
-	scp root@src:/tmp/src.dump $dir/src.dump
 }
 
 iterate_time_and_bandwidth()

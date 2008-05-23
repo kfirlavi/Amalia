@@ -92,3 +92,14 @@ verbose_yes_no()
 		verbose "[No]"
 	fi
 }
+
+# gets a list of pids and wait on them until all are done
+wait_for_pids()
+{
+	local pids="$@"
+	for p in $pids
+	do
+		verbose "waiting for pid $p to finish"
+		wait $p
+	done
+}
