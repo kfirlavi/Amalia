@@ -9,6 +9,40 @@ source $LIB_PATH/remote
 MADWIFI_TIMING_DUMPFILE_DIR="/tmp"
 MADWIFI_TIMING_DUMPFILE_SUFFIX=".madwifi.timing.dump"
 
+madwifi_start_timing_logging_on_all_clients()
+{
+	local pids=
+	for c in $CLIENTS
+	do 
+		madwifi_start_timing_logging "client$c" &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+}
+
+madwifi_stop_timing_logging_on_all_clients()
+{
+	local pids=
+	for c in $CLIENTS
+	do 
+		madwifi_stop_timing_logging "client$c" &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+}
+
+madwifi_move_timing_dumpfile_for_all_clients()
+{
+	local destdir=$1
+	local pids=
+	for c in $CLIENTS
+	do 
+		madwifi_move_timing_dumpfile "client$c" $destdir &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+}
+
 madwifi_start_timing_logging()
 {
 	local host=$1

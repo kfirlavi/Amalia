@@ -127,7 +127,7 @@ start_logging()
 {
 	tcpdump_start_logging ap ath1 $IPERF_PORT
 	tcpdump_start_logging src eth0 $IPERF_PORT
-	madwifi_start_timing_logging ap
+	madwifi_start_timing_logging_on_all_clients
 }
 
 end_logging()
@@ -136,9 +136,9 @@ end_logging()
 	do
 		tcpdump_stop_logging $srv
 		tcpdump_move_dumpfile $srv $dir
-		[[ $srv == "ap" ]] && madwifi_stop_timing_logging $srv
-		[[ $srv == "ap" ]] && madwifi_move_timing_dumpfile $srv $dir
 	done
+	madwifi_stop_timing_logging_on_all_clients
+	madwifi_move_timing_dumpfile_for_all_clients $dir
 }
 
 run_single_test()

@@ -35,7 +35,8 @@ delete_file_on_host()
 {
 	local host=$1
 	local file=$2
-	verbose $(ssh root@$host "rm -f $file" > /dev/null)
+	verbose "Deleting file $file from $host"
+	ssh root@$host "rm -f $file" > /dev/null
 }
 
 run_command_on_all_clients()
