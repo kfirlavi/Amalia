@@ -179,7 +179,7 @@ generate_data_file_for_tcpdump_throughput_in_time()
 			[[ $packets -gt $max_packets ]] && max_packets=$packets
 			data="$data $packets"
 		done
-		release_temp_file tmp_file
+		release_temp_file $tmp_file
 		((counter++))
 	done
 	TCPDUMP_THROUGHPUT_IN_TIME_MAX_PACKETS_SEND=$max_packets
