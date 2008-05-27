@@ -7,8 +7,9 @@ source $LIB_PATH/remote
 
 # Globals
 MADWIFI_TIMING_DUMPFILE_DIR="/tmp"
-MADWIFI_TIMING_DUMPFILE_SUFFIX=".madwifi.timing.dump"
+MADWIFI_TIMING_DUMPFILE_SUFFIX=".madwifi.timing"
 MADWIFI_TIMING_PACKET_SIZE=1534 # this is for filtering 
+MADWIFI_TIMING_LINE_DESCRIPTOR="MADWIFI_DELAY_TIMESTAMPS" 
 
 madwifi_start_timing_logging_on_all_clients()
 {
@@ -74,8 +75,20 @@ madwifi_move_timing_dumpfile()
 madwifi_clean_timing_dumpfile()
 {
 	local file=$1
+	verbose "Cleaning $file from kernel messages and $MADWIFI_TIMING_LINE_DESCRIPTOR"
+	# filter by $MADWIFI_TIMING_LINE_DESCRIPTOR descriptor in the start of the line
+	cat $file | grep "$MADWIFI_TIMING_LINE_DESCRIPTOR" > $file
+	cat $file | cut -f 2- > $file
 	# filter by packet size
 	cat $file | grep $MADWIFI_TIMING_PACKET_SIZE > $file
-	# filter the <7> in the start of the line
-	cat $file | cut -d '>' -f 2 > $file
+}
+
+# this method intended to make sure that the times the packet
+# was enqueued are distinct.
+madwifi_check_timing_dumpfile_enqueue_time_is_distinct()
+{
+	local file=$1
+	local n1=$(cat $file | cut -f 2 | sort -n | uniq | wc -l)
+	local n2=$(cat $file | cut -f 2 | wc -l)
+	ort -n | uniq |wc -l[ n1 -ne n2 ]] && verbose "Timestamps in $file are not distinct!"
 }
