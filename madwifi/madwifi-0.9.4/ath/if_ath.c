@@ -7376,7 +7376,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 		 */
 		if(txq != sc->sc_cabq){
 			printk(KERN_DEBUG "MADWIFI_DELAY_TIMESTAMPS\t%d\t%d\t%u\t%d\t%u\t%d\t%d\t%d\t%u\t%d\t%d\n",
-                		txq->axq_qnum,                            /* queue number */
+                		txq->axq_qnum,                          /* queue number */
 				ds->ds_us.tx.ts_seqnum,			/* hardware seq # */
 				timestamp_after_ack,			/* current time */
 				/* ts->ts_tstamp, u_int16_t */
