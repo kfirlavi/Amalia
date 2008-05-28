@@ -7310,7 +7310,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 	int uapsdq = 0;
 	unsigned long uapsdq_lockflags = 0;
 #ifdef IS_TIME
-	u_int32_t timestamp_after_ack;
+	u_int32_t timestamp_after_ack = 0;
 #endif /* IS_TIME */
 
 	DPRINTF(sc, ATH_DEBUG_TX_PROC, "%s: tx queue %d (0x%x), link %p\n", __func__,
@@ -7358,6 +7358,11 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			break;
 		}
 
+#ifdef IS_TIME
+		if(txq->axq_qnum != 9 && txq->axq_qnum != 8)
+			timestamp_after_ack = ath_hal_gettsf32(ah);	/* now */
+		
+#endif /* IS_TIME */
 		ATH_TXQ_REMOVE_HEAD(txq, bf_list);
 		if (uapsdq)
 			ATH_TXQ_UAPSDQ_UNLOCK_IRQ(txq);
@@ -7370,9 +7375,8 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 		 * ds->ds_us.tx. which points at the same place
 		 */
 		if(txq != sc->sc_cabq){
-			timestamp_after_ack = ath_hal_gettsf32(ah);	/* now */
 			printk(KERN_DEBUG "MADWIFI_DELAY_TIMESTAMPS\t%d\t%d\t%u\t%d\t%u\t%d\t%d\t%d\t%u\t%d\t%d\n",
-                txq->axq_qnum,                            /* queue number */
+                		txq->axq_qnum,                            /* queue number */
 				ds->ds_us.tx.ts_seqnum,			/* hardware seq # */
 				timestamp_after_ack,			/* current time */
 				/* ts->ts_tstamp, u_int16_t */
