@@ -138,7 +138,7 @@ generate_data_file_for_tcpdump_total_mb()
 	#diff $ap_dump_file $src_dump_file 
 	if [[ $? != 0 ]]; then
 		# they are not similar
-		echo "Error: tcpdump files are not similar!"
+		error "tcpdump files are not similar!"
 	fi
 	cat $src_dump_file > $data_file
 	release_temp_file $experiment_dump_file

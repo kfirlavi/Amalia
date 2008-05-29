@@ -4,13 +4,29 @@
 VERBOSE= # no verbos
 DEBUG= # no debug
 
+# Colors
+COLOR_LIGHT_BLUE="\033[1;34m"
+COLOR_LIGHT_GREEN="\033[1;32m"
+COLOR_LIGHT_CYAN="\033[1;36m"
+COLOR_LIGHT_RED="\033[1;31m"
+COLOR_LIGHT_PURPLE="\033[1;35m"
+COLOR_YELLOW="\033[1;33m"
+COLOR_WHITE="\033[1;37m"
+COLOR_NO_COLOR="\033[0m"
+
+VERBOSE_COLOR=$COLOR_LIGHT_PURPLE
+DEBUG_COLOR=$COLOR_LIGHT_GREEN
+ERROR_COLOR=$COLOR_LIGHT_RED
+
 # gets string to output and optional options to echo (-n for example)
 verbose()
 {
 	local str=$1
 	local options=$2
 	if [[ -n $VERBOSE ]]; then
+		echo -en $VERBOSE_COLOR
 		echo $options "$str" >&2
+		echo -en $COLOR_NO_COLOR
 	fi
 }
 
@@ -19,7 +35,9 @@ debug()
 	local str=$1
 	local options=$2
 	if [[ -n $DEBUG ]]; then
+		echo -en $DEBUG_COLOR
 		echo $options "DEBUG: $str" >&2
+		echo -en $COLOR_NO_COLOR
 	fi
 }
 
@@ -39,7 +57,9 @@ error()
 {
 	local str=$1
 	local options=$2
+	echo -en $ERROR_COLOR
 	echo $options "Error: $str" >&2
+	echo -en $COLOR_NO_COLOR
 }
 
 create_temp_file()
