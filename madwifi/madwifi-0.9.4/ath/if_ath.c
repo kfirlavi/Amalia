@@ -6927,13 +6927,6 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 		return -EIO;
 	}
 
-#ifdef IS_TIME
-	if(txq != sc->sc_cabq){
-		/* puts all data packets on the same queue */
-		txq = sc->sc_ac2q[WME_AC_VO]; 
-    	}
-#endif /* IS_TIME */
-
 #ifdef ATH_SUPERG_XR 
 	if (vap->iv_flags & IEEE80211_F_XR ) {
 		txq = sc->sc_xrtxq;
