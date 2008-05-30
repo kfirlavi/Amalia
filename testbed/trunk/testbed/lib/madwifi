@@ -10,6 +10,13 @@ MADWIFI_TIMING_DUMPFILE_DIR="/tmp"
 MADWIFI_TIMING_DUMPFILE_SUFFIX=".madwifi.timing"
 MADWIFI_TIMING_PACKET_SIZE=1534 # this is for filtering 
 MADWIFI_TIMING_LINE_DESCRIPTOR="MADWIFI_DELAY_TIMESTAMPS" 
+MADWIFI_PNG_SIZE="400,300"
+
+# Columns position in madwifi dumpfile
+MADWIFI_COL_ENQUEUE=1
+MADWIFI_COL_ACK=2
+MADWIFI_COL_QUEUE=3
+MADWIFI_COL_TOTAL_QUEUED=5
 
 madwifi_start_timing_logging_on_all_clients()
 {
@@ -83,12 +90,108 @@ madwifi_clean_timing_dumpfile()
 	cat $file | grep $MADWIFI_TIMING_PACKET_SIZE > $file
 }
 
-# this method intended to make sure that the times the packet
-# was enqueued are distinct.
-madwifi_check_timing_dumpfile_enqueue_time_is_distinct()
+# check that a column variabls in a file are distinct
+madwifi_check_timing_dumpfile_column_is_distinct()
 {
 	local file=$1
-	local n1=$(cat $file | cut -f 2 | sort -n | uniq | wc -l)
-	local n2=$(cat $file | cut -f 2 | wc -l)
-	ort -n | uniq |wc -l[ n1 -ne n2 ]] && verbose "Timestamps in $file are not distinct!"
+	local col=$2
+	local n1=$(cat $file | cut -f $col | sort -n | uniq | wc -l)
+	local n2=$(cat $file | cut -f $col | wc -l)
+	verbose "$n1 $n2"
+	[[ $n1 -ne $n2 ]] && error "column $col is not distinct in $file"
+}
+
+madwifi_check_timing_dumpfile_column_sorted()
+{
+	local file=$1
+	local col=$2
+	local tempfile=$(create_temp_file)
+	sort -n -k $col $file > $tempfile
+	diff $file $tempfile > /dev/null
+	[[ $? -ne 0 ]] && error "column $col not sorted in $file"
+	release_temp_file $tempfile
+}
+
+# this method intended to make sure that we use just one queue
+madwifi_check_timing_dumpfile_use_just_one_queue()
+{
+	local file=$1
+	local number_of_queues=$(cat $file | cut -f $MADWIFI_COL_QUEUE | sort | uniq | wc -l)
+	[[ $number_of_queues -ne 1 ]] && error "number of queues used are $number_of_queues != 1 in $file"
+}
+
+madwifi_get_enqueue_and_ack_timestamps_columens()
+{
+	local file=$1
+	cat $file | cut -f "$MADWIFI_COL_ENQUEUE $MADWIFI_COL_ACK"
+}
+
+# Will check that the file is good
+madwifi_check_timing_dumpfile()
+{
+	local file=$1 # gets a clean madwifi timing dump file
+
+	# check that we are using just one queue
+	madwifi_check_timing_dumpfile_use_just_one_queue $file
+
+	# check that the timestemps columns are distinct
+	madwifi_check_timing_dumpfile_column_is_distinct $file $MADWIFI_COL_ENQUEUE
+	madwifi_check_timing_dumpfile_column_is_distinct $file $MADWIFI_COL_ACK
+
+	# check that the timestamps of the enqueue and the ack are in sorted oreder
+	madwifi_check_timing_dumpfile_column_sorted $file $MADWIFI_COL_ENQUEUE
+	madwifi_check_timing_dumpfile_column_sorted $file $MADWIFI_COL_ACK
+	madwifi_check_timing_dumpfile_column_sorted $file $MADWIFI_COL_TOTAL_QUEUED
+}
+
+madwifi_calculate_delays_from_timestamps()
+{
+	local file=$1 # gets a clean madwifi timing dump file
+	madwifi_check_timing_dumpfile $file
+	local prev_t_ack=0
+	cat $file | cut -f "$MADWIFI_COL_ENQUEUE $MADWIFI_COL_ACK" \
+	| while read line
+	do
+		local t_enqueue=$(echo $line | cut -d ' ' -f 1)
+		local t_ack=$(echo $line | cut -d ' ' -f 2) 
+		local mac_delay= 
+		if [[ $prev_t_ack -gt $t_enqueue ]]; then 
+			# current packet was enqueued before 
+			# previouse packet finished sending
+			mac_delay=$((t_ack-prev_t_ack))
+		else
+			# previous packet got ack before this packet 
+			# entered the queue
+			mac_delay=$((t_ack-t_enqueue))
+		fi
+		prev_t_ack=$t_ack
+		echo $mac_delay
+	done
+}
+
+madwifi_generate_histogram_data_for_delay_frequency()
+{
+	local file=$1 # gets a clean madwifi timing dump file
+	local datafile=$(create_temp_file)
+	madwifi_calculate_delays_from_timestamps $file > $datafile
+	for delay in $(cat $datafile | sort -n | uniq)
+	do
+		local count=$(grep --count "$delay" $datafile)
+		echo "$delay $count"
+	done
+	release_temp_file $datafile
+}
+
+madwifi_generate_delay_histogram_plot()
+{
+	local file=$1 # gets a clean madwifi timing dump file
+	local datafile=$(create_temp_file)
+	gnuplot <<- EOF
+		set term png size $MADWIFI_PNG_SIZE
+		set title "Delay slots"
+		set xlabel 'Delay'
+		set ylabel 'Packets'
+		plot $datafile using 1:2 with lines
+		EOF
+	release_temp_file $datafile
 }
