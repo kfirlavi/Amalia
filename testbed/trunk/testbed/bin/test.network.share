@@ -17,6 +17,7 @@ TEST_OUTPUT_DIR=
 TIMES=
 BANDWIDTHS=
 PLOTS= # default no plots
+NO_PLOTS= # Initial value will generate plots
 DIR_FOR_PLOTS="plots"
 STATES_RELATIVE_DIR="states"
 IPERF_PORT=5001
@@ -37,6 +38,7 @@ usage()
 			-n	number of clients to test together
 			-c	clients (just a list of clients eg. "3,16,7,9")
 			-p	generate just plots (without running experiment)
+			-g	don't generate plots
 			-h	Show this message
 			-v 	verbose
 			-x	debug
@@ -45,7 +47,7 @@ usage()
 
 get_opts()
 {
-	while getopts "d:t:b:n:c:pvhx" options; do
+	while getopts "d:t:b:n:c:pgvhx" options; do
 		case $options in
 			d) TEST_OUTPUT_DIR=$OPTARG;;
 			t) TIMES=`echo $OPTARG | tr ',' ' '`;;
@@ -53,6 +55,7 @@ get_opts()
 			n) END=$OPTARG;;
 			c) CLIENTS=`echo $OPTARG | tr ',' ' '`;;
 			p) PLOTS=1;;
+			g) NO_PLOTS=1;;
 			v) VERBOSE=1;;
 			x) DEBUG=1;;
 			h) usage
@@ -281,6 +284,8 @@ main()
 		wireless_802_11b_set_network
 		iterate_time_and_bandwidth
 	fi
-	generate_plots
+	if [[ -z $NO_PLOTS ]]; then
+		generate_plots
+	fi
 }
 main
