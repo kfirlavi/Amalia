@@ -7375,13 +7375,13 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 		 * ds->ds_us.tx. which points at the same place
 		 */
 		if(txq != sc->sc_cabq){
-			printk(KERN_DEBUG "MADWIFI_DELAY_TIMESTAMPS\t%d\t%d\t%u\t%d\t%u\t%d\t%d\t%d\t%u\t%d\t%d\n",
+			printk(KERN_DEBUG "MADWIFI_DELAY_TIMESTAMPS\t%u\t%u\t%d\t%d\t%d\t%d\t%d\t%d\t%u\t%d\t%d\n",
+				bf->time_stamp,				/* time added to tx queue */
+				timestamp_after_ack,			/* current time */
                 		txq->axq_qnum,                          /* queue number */
 				ds->ds_us.tx.ts_seqnum,			/* hardware seq # */
-				timestamp_after_ack,			/* current time */
 				/* ts->ts_tstamp, u_int16_t */
 				txq->axq_totalqueued,			/* ever queued */
-				bf->time_stamp,				/* time added to tx queue */
 				bf->bf_skb->len,			/* packet size */
 				ds->ds_us.tx.ts_status,			/* success or failure */
 				ds->ds_us.tx.ts_rate,			/* rate code */
