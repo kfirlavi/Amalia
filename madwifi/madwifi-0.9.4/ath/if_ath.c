@@ -7352,9 +7352,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 		}
 
 #ifdef IS_TIME
-		if(txq->axq_qnum != 9 && txq->axq_qnum != 8)
-			timestamp_after_ack = ath_hal_gettsf32(ah);	/* now */
-		
+		timestamp_after_ack = ath_hal_gettsf32(ah);	/* now */
 #endif /* IS_TIME */
 		ATH_TXQ_REMOVE_HEAD(txq, bf_list);
 		if (uapsdq)
@@ -7367,24 +7365,22 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 		 * ts structure not used in the 0.9.4 (stable) so use
 		 * ds->ds_us.tx. which points at the same place
 		 */
-		if(txq != sc->sc_cabq){
-			printk(KERN_DEBUG "MADWIFI_DELAY_TIMESTAMPS\t%u\t%u\t%d\t%d\t%d\t%d\t%d\t%d\t%u\t%d\t%d\n",
-				bf->time_stamp,				/* time added to tx queue */
-				timestamp_after_ack,			/* current time */
-                		txq->axq_qnum,                          /* queue number */
-				ds->ds_us.tx.ts_seqnum,			/* hardware seq # */
-				/* ts->ts_tstamp, u_int16_t */
-				txq->axq_totalqueued,			/* ever queued */
-				bf->bf_skb->len,			/* packet size */
-				ds->ds_us.tx.ts_status,			/* success or failure */
-				ds->ds_us.tx.ts_rate,			/* rate code */
-				txq->axq_depth,				/* queue occupancy */
-				ds->ds_us.tx.ts_longretry,		/* long retries (all) */
-				/* ds->ds_txstat.ts_shortretry */
-				/* ds->ds_txstat.ts_virtcol, */
-				ds->ds_us.tx.ts_rssi			/* ack rssi */
-			);
-		}
+		printk(KERN_DEBUG "MADWIFI_DELAY_TIMESTAMPS\t%u\t%u\t%d\t%d\t%d\t%d\t%d\t%d\t%u\t%d\t%d\n",
+			bf->time_stamp,				/* time added to tx queue */
+			timestamp_after_ack,			/* current time */
+			txq->axq_qnum,                          /* queue number */
+			ds->ds_us.tx.ts_seqnum,			/* hardware seq # */
+			/* ts->ts_tstamp, u_int16_t */
+			txq->axq_totalqueued,			/* ever queued */
+			bf->bf_skb->len,			/* packet size */
+			ds->ds_us.tx.ts_status,			/* success or failure */
+			ds->ds_us.tx.ts_rate,			/* rate code */
+			txq->axq_depth,				/* queue occupancy */
+			ds->ds_us.tx.ts_longretry,		/* long retries (all) */
+			/* ds->ds_txstat.ts_shortretry */
+			/* ds->ds_txstat.ts_virtcol, */
+			ds->ds_us.tx.ts_rssi			/* ack rssi */
+		);
 #endif /* IS_TIME */
 
 		ni = bf->bf_node;
