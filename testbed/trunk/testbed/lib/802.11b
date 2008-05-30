@@ -15,11 +15,13 @@ WIRELESS_802_11b_CWMAX=10
 WIRELESS_802_11b_AIFS=2
 WIRELESS_802_11b_TXOP=0
 WIRELESS_802_11b_QUEUES=$(seq 0 3)
+WIRELESS_802_11b_MODE=11b
 
 wireless_802_11b_generate_get_commands()
 {
 	local interface=$1 #(ath0,ath1,eth0...)
 
+	echo -n "iwpriv $interface get_mode && "
 	for queue in $WIRELESS_802_11b_QUEUES
 	do
 		for flag in 0 1
@@ -37,6 +39,7 @@ wireless_802_11b_generate_set_commands()
 {
 	local interface=$1 #(ath0,ath1,eth0...)
 
+	echo -n "iwpriv $interface mode $WIRELESS_802_11b_MODE && "
 	for queue in $WIRELESS_802_11b_QUEUES
 	do
 		for flag in 0 1
