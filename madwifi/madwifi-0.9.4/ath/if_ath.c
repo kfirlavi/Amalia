@@ -7354,6 +7354,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 #ifdef IS_TIME
 		timestamp_after_ack = ath_hal_gettsf32(ah);	/* now */
 #endif /* IS_TIME */
+
 		ATH_TXQ_REMOVE_HEAD(txq, bf_list);
 		if (uapsdq)
 			ATH_TXQ_UAPSDQ_UNLOCK_IRQ(txq);
@@ -7370,15 +7371,12 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			timestamp_after_ack,			/* current time */
 			txq->axq_qnum,                          /* queue number */
 			ds->ds_us.tx.ts_seqnum,			/* hardware seq # */
-			/* ts->ts_tstamp, u_int16_t */
 			txq->axq_totalqueued,			/* ever queued */
 			bf->bf_skb->len,			/* packet size */
 			ds->ds_us.tx.ts_status,			/* success or failure */
 			ds->ds_us.tx.ts_rate,			/* rate code */
 			txq->axq_depth,				/* queue occupancy */
 			ds->ds_us.tx.ts_longretry,		/* long retries (all) */
-			/* ds->ds_txstat.ts_shortretry */
-			/* ds->ds_txstat.ts_virtcol, */
 			ds->ds_us.tx.ts_rssi			/* ack rssi */
 		);
 #endif /* IS_TIME */
