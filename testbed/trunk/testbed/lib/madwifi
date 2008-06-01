@@ -176,7 +176,12 @@ madwifi_generate_histogram_data_for_delay_frequency()
 	madwifi_calculate_delays_from_timestamps $file > $datafile
 	for delay in $(cat $datafile | sort -n | uniq)
 	do
-		local count=$(grep --count "$delay" $datafile)
+		local pre_minus=''
+		if [[ $delay -lt 0 ]]; then
+			local pre_minus='\'
+			error "Delay value is negative ($delay)"
+		fi
+		local count=$(grep --count "$pre_minus$delay" $datafile)
 		echo "$delay $count"
 	done
 	release_temp_file $datafile
@@ -185,13 +190,27 @@ madwifi_generate_histogram_data_for_delay_frequency()
 madwifi_generate_delay_histogram_plot()
 {
 	local file=$1 # gets a clean madwifi timing dump file
+	local outputfile=$2
 	local datafile=$(create_temp_file)
-	gnuplot <<- EOF
+	madwifi_generate_histogram_data_for_delay_frequency $file > $datafile
+	gnuplot <<- EOF > $outputfile
 		set term png size $MADWIFI_PNG_SIZE
 		set title "Delay slots"
 		set xlabel 'Delay'
 		set ylabel 'Packets'
-		plot $datafile using 1:2 with lines
+		plot "$datafile" using 1:2 with lines
 		EOF
 	release_temp_file $datafile
+}
+
+madwifi_generate_delay_histogram_plot_for_all_clients()
+{
+	local workdir=$1
+	local plots_filename_head=$2
+	for c in $CLIENTS
+	do
+		local dumpfile=$workdir/client$c$MADWIFI_TIMING_DUMPFILE_SUFFIX
+		local png_filename="$plots_filename_head.client$c$MADWIFI_TIMING_DUMPFILE_SUFFIX.png"
+		madwifi_generate_delay_histogram_plot $dumpfile $png_filename
+	done
 }

@@ -270,6 +270,7 @@ generate_plots()
 			release_temp_file $data_file
 
 			generate_tcpdump_plots "$workdir" "$plots_dir" "$file_name" "$plot_title"
+			madwifi_generate_delay_histogram_plot_for_all_clients "$workdir" "$plot_file_name"
 		done
 	done
 	generate_index_file $plots_dir
