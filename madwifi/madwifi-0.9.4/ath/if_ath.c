@@ -2323,6 +2323,12 @@ ath_tx_txqaddbuf(struct ath_softc *sc, struct ieee80211_node *ni,
 		ath_hal_txstart(ah, txq->axq_qnum);
 		sc->sc_dev->trans_start = jiffies;
 	}
+#ifdef IS_TIME
+    /*
+    * Want to be sure timestamping in correct place, and inside spinlock 
+    */     
+	bf->time_stamp = ath_hal_gettsf32(ah);
+#endif /* IS_TIME */
 	ATH_TXQ_UNLOCK(txq);
 
 	sc->sc_devstats.tx_packets++;
@@ -7145,8 +7151,11 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 	}
 
 #ifdef IS_TIME
-	/* add TX interrupt request flag here */
-	flags |= HAL_TXDESC_INTREQ;
+	/* add TX interrupt request flag here 
+     * need this or the ACK timestamps will not be correct 
+     * several frames will be handled in quick succesion
+     */
+    flags |= HAL_TXDESC_INTREQ; 
 #endif /* IS_TIME */
 
 	DPRINTF(sc, ATH_DEBUG_XMIT, "%s: set up txdesc: pktlen %d hdrlen %d "
@@ -7274,13 +7283,6 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 		__func__, vap->iv_bss, ether_sprintf(vap->iv_bss->ni_macaddr),
 		ieee80211_node_refcnt(vap->iv_bss));
 
-#ifdef IS_TIME
-	/* time stamp before a packet added to the queue */
-	if(txq != sc->sc_cabq){
-		bf->time_stamp = ath_hal_gettsf32(ah);
-	}
-#endif /* IS_TIME */
-
 	ath_tx_txqaddbuf(sc, ni, txq, bf, ds, pktlen);
 	return 0;
 #undef MIN
@@ -7352,7 +7354,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 		}
 
 #ifdef IS_TIME
-		timestamp_after_ack = ath_hal_gettsf32(ah);	/* now */
+		timestamp_after_ack = ath_hal_gettsf32(ah);	
 #endif /* IS_TIME */
 
 		ATH_TXQ_REMOVE_HEAD(txq, bf_list);
@@ -7379,6 +7381,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			ds->ds_us.tx.ts_longretry,		/* long retries (all) */
 			ds->ds_us.tx.ts_rssi			/* ack rssi */
 		);
+		timestamp_after_ack = 1; /* it's unsigned */
 #endif /* IS_TIME */
 
 		ni = bf->bf_node;
