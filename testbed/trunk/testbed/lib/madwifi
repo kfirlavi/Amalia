@@ -57,7 +57,8 @@ madwifi_start_timing_logging()
 	local host=$1
 	local dumpfile=$MADWIFI_TIMING_DUMPFILE_DIR/$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
 	verbose "Collecting madwifi timing data on $host"
-	ssh root@$host "cat /proc/kmsg > $dumpfile" 2> /dev/null &
+	# filter by $MADWIFI_TIMING_LINE_DESCRIPTOR descriptor in the start of the line
+	ssh root@$host "cat /proc/kmsg | grep $MADWIFI_TIMING_LINE_DESCRIPTOR > $dumpfile" 2> /dev/null &
 }
 
 madwifi_stop_timing_logging()
@@ -82,12 +83,13 @@ madwifi_move_timing_dumpfile()
 madwifi_clean_timing_dumpfile()
 {
 	local file=$1
+	local tempfile=$(create_temp_file)
 	verbose "Cleaning $file from kernel messages and $MADWIFI_TIMING_LINE_DESCRIPTOR"
-	# filter by $MADWIFI_TIMING_LINE_DESCRIPTOR descriptor in the start of the line
-	cat $file | grep "$MADWIFI_TIMING_LINE_DESCRIPTOR" > $file
-	cat $file | cut -f 2- > $file
+	cat $file | cut -f 2- > $tempfile
 	# filter by packet size
-	cat $file | grep $MADWIFI_TIMING_PACKET_SIZE > $file
+	verbose "Filtering $file by packet size $MADWIFI_TIMING_PACKET_SIZE"
+	grep $MADWIFI_TIMING_PACKET_SIZE $tempfile > $file
+	release_temp_file $tempfile
 }
 
 # check that a column variabls in a file are distinct
