@@ -151,12 +151,12 @@ madwifi_calculate_delays_from_timestamps()
 	local file=$1 # gets a clean madwifi timing dump file
 	madwifi_check_timing_dumpfile $file
 	local prev_t_ack=0
+	local t_enqueue=
+	local t_ack=
+	local mac_delay= 
 	cat $file | cut -f "$MADWIFI_COL_ENQUEUE $MADWIFI_COL_ACK" \
-	| while read line
+	| while read t_enqueue t_ack
 	do
-		local t_enqueue=$(echo $line | cut -d ' ' -f 1)
-		local t_ack=$(echo $line | cut -d ' ' -f 2) 
-		local mac_delay= 
 		if [[ $prev_t_ack -gt $t_enqueue ]]; then 
 			# current packet was enqueued before 
 			# previouse packet finished sending
