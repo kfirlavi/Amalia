@@ -397,7 +397,7 @@ struct ath_buf {
 	dma_addr_t bf_skbaddrff[ATH_TXDESC-1]; 	/* extra addrs for ff */
 #endif
 #ifdef IS_TIME
-	u_int32_t time_stamp;				// timestamp
+	struct timeval time_stamp;		/* time the packet enqueue */
 #endif /* IS_TIME */
 };
 

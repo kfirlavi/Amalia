@@ -2324,10 +2324,10 @@ ath_tx_txqaddbuf(struct ath_softc *sc, struct ieee80211_node *ni,
 		sc->sc_dev->trans_start = jiffies;
 	}
 #ifdef IS_TIME
-    /*
-    * Want to be sure timestamping in correct place, and inside spinlock 
-    */     
-	bf->time_stamp = ath_hal_gettsf32(ah);
+	/*
+	* Want to be sure timestamping in correct place, and inside spinlock 
+	*/     
+	do_gettimeofday(&(bf->time_stamp));
 #endif /* IS_TIME */
 	ATH_TXQ_UNLOCK(txq);
 
@@ -7305,7 +7305,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 	int uapsdq = 0;
 	unsigned long uapsdq_lockflags = 0;
 #ifdef IS_TIME
-	u_int32_t timestamp_after_ack = 0;
+	struct timeval timestamp_after_ack;
 #endif /* IS_TIME */
 
 	DPRINTF(sc, ATH_DEBUG_TX_PROC, "%s: tx queue %d (0x%x), link %p\n", __func__,
@@ -7354,7 +7354,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 		}
 
 #ifdef IS_TIME
-		timestamp_after_ack = ath_hal_gettsf32(ah);	
+		do_gettimeofday(&timestamp_after_ack);
 #endif /* IS_TIME */
 
 		ATH_TXQ_REMOVE_HEAD(txq, bf_list);
@@ -7368,9 +7368,14 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 		 * ts structure not used in the 0.9.4 (stable) so use
 		 * ds->ds_us.tx. which points at the same place
 		 */
-		printk(KERN_DEBUG "MADWIFI_DELAY_TIMESTAMPS\t%u\t%u\t%d\t%d\t%d\t%d\t%d\t%d\t%u\t%d\t%d\n",
-			bf->time_stamp,				/* time added to tx queue */
-			timestamp_after_ack,			/* current time */
+		printk(KERN_DEBUG "MADWIFI_DELAY_TIMESTAMPS\t%lu%06ld\t%lu%06ld\t%d\t%d\t%d\t%d\t%d\t%d\t%u\t%d\t%d\n",
+			/* time added to tx queue */
+			bf->time_stamp.tv_sec,			/* seconds since Jan. 1, 1970 */
+			bf->time_stamp.tv_usec,			/* microseconds */
+			/* time after ack */
+			timestamp_after_ack.tv_sec,		/* seconds since Jan. 1, 1970 */
+			timestamp_after_ack.tv_usec,		/* microseconds */
+
 			txq->axq_qnum,                          /* queue number */
 			ds->ds_us.tx.ts_seqnum,			/* hardware seq # */
 			txq->axq_totalqueued,			/* ever queued */
@@ -7381,7 +7386,6 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			ds->ds_us.tx.ts_longretry,		/* long retries (all) */
 			ds->ds_us.tx.ts_rssi			/* ack rssi */
 		);
-		timestamp_after_ack = 1; /* it's unsigned */
 #endif /* IS_TIME */
 
 		ni = bf->bf_node;
