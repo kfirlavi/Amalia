@@ -99,7 +99,6 @@ madwifi_check_timing_dumpfile_column_is_distinct()
 	local col=$2
 	local n1=$(cat $file | cut -f $col | sort -n | uniq | wc -l)
 	local n2=$(cat $file | cut -f $col | wc -l)
-	verbose "$n1 $n2"
 	[[ $n1 -ne $n2 ]] && error "column $col is not distinct in $file"
 }
 
@@ -192,27 +191,29 @@ madwifi_generate_histogram_data_for_delay_frequency()
 madwifi_generate_delay_histogram_plot()
 {
 	local file=$1 # gets a clean madwifi timing dump file
-	local outputfile=$2
-	local datafile=$(create_temp_file)
+	local outfile_prefix=$2
+	local plot_title=$3
+	local datafile=$outfile_prefix.data
 	madwifi_generate_histogram_data_for_delay_frequency $file > $datafile
-	gnuplot <<- EOF > $outputfile
+	gnuplot <<- EOF > $outfile_prefix.png
 		set term png size $MADWIFI_PNG_SIZE
-		set title "Delay slots"
+		set title "Delay slots $plot_title"
 		set xlabel 'Delay'
 		set ylabel 'Packets'
-		plot "$datafile" using 1:2 with lines
+		plot "$datafile" using 1:2 with linespoints title ''
 		EOF
-	release_temp_file $datafile
 }
 
 madwifi_generate_delay_histogram_plot_for_all_clients()
 {
 	local workdir=$1
 	local plots_filename_head=$2
+	local plots_title=$3
 	for c in $CLIENTS
 	do
 		local dumpfile=$workdir/client$c$MADWIFI_TIMING_DUMPFILE_SUFFIX
-		local png_filename="$plots_filename_head.client$c$MADWIFI_TIMING_DUMPFILE_SUFFIX.png"
-		madwifi_generate_delay_histogram_plot $dumpfile $png_filename
+		local filename_prefix="$plots_filename_head.client$c$MADWIFI_TIMING_DUMPFILE_SUFFIX"
+		verbose "Generating madwifi delay histogram plot for client$c"
+		madwifi_generate_delay_histogram_plot $dumpfile $filename_prefix "$plots_title"
 	done
 }

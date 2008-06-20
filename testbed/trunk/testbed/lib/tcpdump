@@ -216,6 +216,7 @@ generate_throughput_plot_for_each_client()
 
 	for c in $CLIENTS
 	do
+		verbose "Generating throughput plot for client$c titled '$title'"
         	echo "set output '$output_file_name.client$c.png'" >> $plot_tmp_file
 		local col=$((c+1))
 	        echo "plot \"$data_file\" using 1:$col with lines title 'client$c'" >> $plot_tmp_file
@@ -232,6 +233,7 @@ generate_throughput_plot_clients_combined()
         local xlabel=$4
         local ylabel=$5
         local plot_tmp_file=`create_temp_file`
+	verbose "Generate tcpdump throughput plot for all clients combined"
 	common_plot_commands_for_throughput_plots "$title" "$xlabel" "$ylabel" > $plot_tmp_file
         echo "set output '$output_file_name.png'" >> $plot_tmp_file
 	echo -n "plot " >> $plot_tmp_file
@@ -284,18 +286,20 @@ generate_tcpdump_plots()
 	local data_dump_file=`create_temp_file`
 	local throuput_plots_data=`create_temp_file`
 
+	verbose "Generating tcpdump plots for $plot_file_name"
 	local throuput_plots_dir=$plots_dir/throughput
 	create_directory $throuput_plots_dir
 
 	generate_tcpdump_start_to_end_of_experiment $workdir/ap.dump > $experiment_dump_file
 	generate_data_file_for_tcpdump_throughput_in_time $experiment_dump_file > $data_dump_file
 
+	verbose "Generating tcpdump plot of total MB sent by clients"
 	generate_data_file_for_tcpdump_total_mb $data_dump_file $workdir
 	plot_png $data_dump_file \
 		"$plots_dir/$plot_file_name.tcpdump" \
 		"Tcpdump $plot_title" "Clients" "packets sent" "1:2"
 
-	# generate throuput plots
+	verbose "Generating tcpdump throuput plots"
 	generate_data_file_for_throughput_plot \
 		$workdir/ap.dump \
 		$THROUGHPUT_PLOTS_START_TIME \

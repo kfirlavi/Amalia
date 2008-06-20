@@ -17,6 +17,7 @@ COLOR_NO_COLOR="\033[0m"
 VERBOSE_COLOR=$COLOR_YELLOW
 DEBUG_COLOR=$COLOR_LIGHT_GREEN
 ERROR_COLOR=$COLOR_LIGHT_RED
+BOLD_COLOR=$COLOR_LIGHT_BLUE
 
 # gets string to output and optional options to echo (-n for example)
 verbose()
@@ -27,6 +28,13 @@ verbose()
 		echo -en "${VERBOSE_COLOR}verbose: $COLOR_NO_COLOR" >&2
 		echo $options "$str" >&2
 	fi
+}
+
+verbose_bold()
+{
+	local str=$1
+	local options=$2
+	verbose "$BOLD_COLOR$str$COLOR_NO_COLOR" "-e $options"
 }
 
 debug()
@@ -81,7 +89,7 @@ create_directory()
 	local dir=$1
 	mkdir -p $dir
 	if [[ -d $dir ]]; then
-		echo $dir
+		verbose "Directory '$dir' created"
 	else
 		error "Error: cann't create directory \"$dir\""
 		exit 1

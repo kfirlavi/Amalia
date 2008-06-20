@@ -175,6 +175,7 @@ iterate_time_and_bandwidth()
 	do
 		for b in $BANDWIDTHS
 		do
+			verbose_bold "Running test for time $t and bandwidth ${b}m"
 			run_single_test $t $b 
 		done
 	done
@@ -239,10 +240,18 @@ generate_index_file()
 {
 	local dir=$1
 	local html=$dir/index.html
+	verbose "Generating $html"
 	echo "<html><body>" > $html
 	for i in $(cd $dir && find -name '*png' | sort -n -t t -k 9,9n)
 	do
-		echo "<img align='center' src='$i' alt='' />" >> $html
+		local datafile_name=$(echo $i| sed 's/\.png//g').data
+		if [[ -f $dir/$datafile_name ]]; then
+			debug "data file exist for plot $i, so we link to it"
+			echo "<a href='$datafile_name'><img align='center' src='$i' alt='' /></a>" >> $html
+		else
+			debug "$i don't have data file. Not creating link."
+			echo "<img align='center' src='$i' alt='' />" >> $html
+		fi
 	done
 	echo "</html></body>" >> $html
 }
@@ -258,6 +267,7 @@ generate_plots()
 	do
 		for b in $BANDWIDTHS
 		do
+			verbose_bold "Working on plots with time $t and bandwidth ${b}m"
 			local file_name="iperf.time.$t.bandwidth.${b}m"
 			local plot_file_name="$plots_dir/iperf.time.$t.bandwidth.${b}m"
 			local plot_title="udp\n($CLIENTS -> src)\nDuration:$t Bandwidth:${b}m"
@@ -265,12 +275,14 @@ generate_plots()
 
 			local data_file=`create_temp_file`
 			generate_data_file $data_file $workdir
+			verbose "Generating plot total MB 'Iperf $plot_title'"
 			plot_png $data_file "$plot_file_name.total_mb" "Iperf $plot_title" "Clients" "KBytes" "1:2"
+			verbose "Generating plot kbits/sec 'Iperf $plot_title'"
 			plot_png $data_file "$plot_file_name.kbits_per_sec" "Iperf $plot_title" "Clients" "Kbits/sec" "1:3"
 			release_temp_file $data_file
 
 			generate_tcpdump_plots "$workdir" "$plots_dir" "$file_name" "$plot_title"
-			madwifi_generate_delay_histogram_plot_for_all_clients "$workdir" "$plot_file_name"
+			madwifi_generate_delay_histogram_plot_for_all_clients "$workdir" "$plot_file_name" "$plot_title"
 		done
 	done
 	generate_index_file $plots_dir
