@@ -182,7 +182,7 @@ madwifi_generate_histogram_data_for_delay_frequency()
 			local pre_minus='\'
 			error "Delay value is negative ($delay)"
 		fi
-		local count=$(grep --count "$pre_minus$delay" $datafile)
+		local count=$(grep --count "^$pre_minus$delay$" $datafile)
 		echo "$delay $count"
 	done
 	release_temp_file $datafile
