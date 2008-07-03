@@ -62,6 +62,11 @@
 #include <linux/rtnetlink.h>
 #include <asm/uaccess.h>
 
+#ifdef MADWIFI_TCP_INFO
+#include <net/tcp.h>
+#endif /* MADWIFI_TCP_INFO */
+
+
 #include "if_ethersubr.h"		/* for ETHER_IS_MULTICAST */
 #include "if_media.h"
 #include "if_llc.h"
@@ -466,10 +471,10 @@ ath_attach(u_int16_t devid, struct net_device *dev, HAL_BUS_TAG tag)
 	 * support it will return true w/o doing anything.
 	 */
 	sc->sc_mrretry = ath_hal_setupxtxdesc(ah, NULL, 0,0, 0,0, 0,0);
-#ifdef IS_FRATE
+#ifdef FIXED_RATE
 	/* sysctl fixedrate stuff 11Mbps for starters */
 	sc->sc_fixedrate = 11000;
-#endif /* IS_FRATE */
+#endif /* FIXED_RATE */
 	/*
 	 * Check if the device has hardware counters for PHY
 	 * errors.  If so we need to enable the MIB interrupt
@@ -2323,12 +2328,12 @@ ath_tx_txqaddbuf(struct ath_softc *sc, struct ieee80211_node *ni,
 		ath_hal_txstart(ah, txq->axq_qnum);
 		sc->sc_dev->trans_start = jiffies;
 	}
-#ifdef IS_TIME
+#ifdef TIMING_INFO
 	/*
 	* Want to be sure timestamping in correct place, and inside spinlock 
 	*/     
 	do_gettimeofday(&(bf->time_stamp));
-#endif /* IS_TIME */
+#endif /* TIMING_INFO */
 	ATH_TXQ_UNLOCK(txq);
 
 	sc->sc_devstats.tx_packets++;
@@ -6818,12 +6823,12 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 		sc->sc_stats.ast_tx_shortpre++;
 	} else
 		shortPreamble = AH_FALSE;
-#ifdef IS_FRATE
+#ifdef FIXED_RATE
           /* only use long preambles
              leave this in fixedrate for now
           */
           shortPreamble = AH_FALSE;
-#endif /* IS_FRATE */
+#endif /* FIXED_RATE */
 
 
 	an = ATH_NODE(ni);
@@ -6887,19 +6892,19 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 			/*
 			 * Data frames; consult the rate control module.
 			 */
-#ifndef IS_FRATE		
+#ifndef FIXED_RATE		
 			/* when fixed rate is on, we don't need to find the rate */
 			sc->sc_rc->ops->findrate(sc, an, shortPreamble, skb->len,
 				&rix, &try0, &txrate);
-#endif /* IS_FRATE */
-#ifdef IS_FRATE
+#endif /* FIXED_RATE */
+#ifdef FIXED_RATE
 			/* get the rate from sysctl, or /proc/sys */
 			rix = ath_tx_findindex(rt, sc->sc_fixedrate);
 			txrate = rt->info[rix].rateCode;
 
 			/* no multirate retries when try0==ATH_TXMAXTRY */
 			try0 = ATH_TXMAXTRY;
-#endif /* IS_FRATE */
+#endif /* FIXED_RATE */
 
 			/* Ratecontrol sometimes returns invalid rate index */
 			if (rix != 0xff)
@@ -7150,13 +7155,13 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 		return -EIO;
 	}
 
-#ifdef IS_TIME
+#ifdef TIMING_INFO
 	/* add TX interrupt request flag here 
      * need this or the ACK timestamps will not be correct 
      * several frames will be handled in quick succesion
      */
     flags |= HAL_TXDESC_INTREQ; 
-#endif /* IS_TIME */
+#endif /* TIMING_INFO */
 
 	DPRINTF(sc, ATH_DEBUG_XMIT, "%s: set up txdesc: pktlen %d hdrlen %d "
 		"atype %d txpower %d txrate %d try0 %d keyix %d ant %d flags %x "
@@ -7304,9 +7309,13 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 	HAL_STATUS status;
 	int uapsdq = 0;
 	unsigned long uapsdq_lockflags = 0;
-#ifdef IS_TIME
+#ifdef TIMING_INFO
 	struct timeval timestamp_after_ack;
-#endif /* IS_TIME */
+#endif /* TIMING_INFO */
+#ifdef MADWIFI_TCP_INFO
+	__u32 tcp_seq = 0;
+	__u32 tcp_ack_seq = 0;
+#endif /* MADWIFI_TCP_INFO */
 
 	DPRINTF(sc, ATH_DEBUG_TX_PROC, "%s: tx queue %d (0x%x), link %p\n", __func__,
 		txq->axq_qnum, ath_hal_gettxbuf(sc->sc_ah, txq->axq_qnum),
@@ -7353,9 +7362,18 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			break;
 		}
 
-#ifdef IS_TIME
+#ifdef TIMING_INFO
 		do_gettimeofday(&timestamp_after_ack);
-#endif /* IS_TIME */
+#endif /* TIMING_INFO */
+#ifdef MADWIFI_TCP_INFO
+		/* If the poiner to the TCP header exists
+		 * then we get the sequence and ack number of the tcp packet 
+		 */
+		if( bf->bf_skb->transport_header) {
+			tcp_seq = ((struct tcphdr *) bf->bf_skb->transport_header)->seq;
+			tcp_ack_seq = ((struct tcphdr *) bf->bf_skb->transport_header)->ack_seq;
+		}
+#endif /* MADWIFI_TCP_INFO */
 
 		ATH_TXQ_REMOVE_HEAD(txq, bf_list);
 		if (uapsdq)
@@ -7363,12 +7381,16 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 		else
 			ATH_TXQ_UNLOCK(txq);
 
-#ifdef IS_TIME
+#ifdef TIMING_INFO
 		/* get current time and print stats
 		 * ts structure not used in the 0.9.4 (stable) so use
 		 * ds->ds_us.tx. which points at the same place
 		 */
-		printk(KERN_DEBUG "MADWIFI_DELAY_TIMESTAMPS\t%lu%06ld\t%lu%06ld\t%d\t%d\t%d\t%d\t%d\t%d\t%u\t%d\t%d\n",
+		printk(KERN_DEBUG "MADWIFI_DELAY_TIMESTAMPS\t%lu%06ld\t%lu%06ld\t%d\t%d\t%d\t%d\t%d\t%d\t%u\t%d\t%d"
+#ifdef MADWIFI_TCP_INFO
+			"\t%u\t%u"
+#endif /* MADWIFI_TCP_INFO */
+			"\n",
 			/* time added to tx queue */
 			bf->time_stamp.tv_sec,			/* seconds since Jan. 1, 1970 */
 			bf->time_stamp.tv_usec,			/* microseconds */
@@ -7385,8 +7407,13 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			txq->axq_depth,				/* queue occupancy */
 			ds->ds_us.tx.ts_longretry,		/* long retries (all) */
 			ds->ds_us.tx.ts_rssi			/* ack rssi */
+#ifdef MADWIFI_TCP_INFO
+			,
+			tcp_seq,				/* tcp sequence number */
+			tcp_ack_seq				/* tcp ack sequence number */
+#endif /* MADWIFI_TCP_INFO */
 		);
-#endif /* IS_TIME */
+#endif /* TIMING_INFO */
 
 		ni = bf->bf_node;
 		if (ni != NULL) {
@@ -9420,9 +9447,9 @@ enum {
 	ATH_ACKRATE		= 22,
 	ATH_INTMIT		= 23,
 	ATH_MAXVAPS		= 26,
-#ifdef IS_FRATE
+#ifdef FIXED_RATE
 	ATH_FIXEDRATE		= 27, 
-#endif /* IS_FRATE */
+#endif /* FIXED_RATE */
 };
 
 static int
@@ -9560,11 +9587,11 @@ ATH_SYSCTL_DECL(ath_sysctl_halparam, ctl, write, filp, buffer, lenp, ppos)
 				    !sc->sc_invalid)
 					ath_reset(sc->sc_dev);
 				break;
-#ifdef IS_FRATE
+#ifdef FIXED_RATE
 			case ATH_FIXEDRATE:
 				sc->sc_fixedrate = val;
 				break;
-#endif /* IS_FRATE */
+#endif /* FIXED_RATE */
 			default:
 				return -EINVAL;
 			}
@@ -9630,11 +9657,11 @@ ATH_SYSCTL_DECL(ath_sysctl_halparam, ctl, write, filp, buffer, lenp, ppos)
 		case ATH_INTMIT:
 			val = sc->sc_useintmit;
 			break;
-#ifdef IS_FRATE
+#ifdef FIXED_RATE
 		case ATH_FIXEDRATE:
 			val = sc->sc_fixedrate;
 			break;
-#endif /* IS_FRATE */
+#endif /* FIXED_RATE */
 		default:
 			return -EINVAL;
 		}
@@ -9765,14 +9792,14 @@ static const ctl_table ath_sysctl_template[] = {
 	  .proc_handler	= ath_sysctl_halparam,
 	  .extra2	= (void *)ATH_INTMIT,
 	},
-#ifdef IS_FRATE
- 	{ .ctl_name     = CTL_AUTO,  //ian
+#ifdef FIXED_RATE
+ 	{ .ctl_name     = CTL_AUTO,
 	  .procname     = "fixedrate",
 	  .mode         = 0644,
 	  .proc_handler = ath_sysctl_halparam,
 	  .extra2       = (void *)ATH_FIXEDRATE, 
 	},
-#endif /* IS_FRATE */
+#endif /* FIXED_RATE */
 	{ 0 }
 };
 

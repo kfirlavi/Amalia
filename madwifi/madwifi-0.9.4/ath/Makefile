@@ -63,12 +63,14 @@ INCS += -I$(TOP) -I$(ATH_HAL) -I$(HAL) -I$(WLAN)
 
 EXTRA_CFLAGS+= $(INCS) $(COPTS) -DOPT_AH_H=\"$(HAL)/public/$(TARGET).opt_ah.h\"
 
-#IS_FRATE
-ifeq (${FRFLAG},1)
-EXTRA_CFLAGS+= -DIS_FRATE
+ifeq (${FIXED_RATE},1)
+EXTRA_CFLAGS+= -DFIXED_RATE
 endif
-ifeq (${TIMEFLAG},1)
-EXTRA_CFLAGS+= -DIS_TIME
+ifeq (${TIMING_INFO},1)
+EXTRA_CFLAGS+= -DTIMING_INFO
+endif
+ifeq (${MADWIFI_TCP_INFO},1)
+EXTRA_CFLAGS+= -DMADWIFI_TCP_INFO
 endif
 
 -include $(TOPDIR)/Rules.make

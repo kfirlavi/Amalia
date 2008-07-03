@@ -396,9 +396,9 @@ struct ath_buf {
 	u_int32_t bf_queueage; 			/* "age" of txq when this buffer placed on stageq */
 	dma_addr_t bf_skbaddrff[ATH_TXDESC-1]; 	/* extra addrs for ff */
 #endif
-#ifdef IS_TIME
+#ifdef TIMING_INFO
 	struct timeval time_stamp;		/* time the packet enqueue */
-#endif /* IS_TIME */
+#endif /* TIMING_INFO */
 };
 
 /*
@@ -580,9 +580,9 @@ struct ath_softc {
 	unsigned int	sc_ackrate:1;		/* send acks at high bitrate */
 	unsigned int	sc_hasintmit:1;		/* Has interference mitigation */
 	unsigned int	sc_useintmit:1;		/* Use interference mitigation (ANI) */
-#ifdef IS_FRATE
+#ifdef FIXED_RATE
 	unsigned int sc_fixedrate;              /* rate to send packets at */
-#endif 
+#endif /* FIXED_RATE */
 
 	/* rate tables */
 	const HAL_RATE_TABLE *sc_rates[IEEE80211_MODE_MAX];
