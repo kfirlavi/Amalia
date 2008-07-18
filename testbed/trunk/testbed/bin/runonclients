@@ -71,6 +71,6 @@ process_options()
 main()
 {
 	process_options
-	run_command_on_all_clients "root" "$COMMAND"
+	remote_run_command_on_all_clients "root" "$COMMAND"
 }
 main

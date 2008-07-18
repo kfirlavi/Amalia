@@ -24,6 +24,8 @@ MADWIFI_COL_ACK=2
 MADWIFI_COL_QUEUE=3
 MADWIFI_COL_TOTAL_QUEUED=5
 MADWIFI_COL_NUMBER_OF_RETRIES=10
+MADWIFI_COL_TCP_SEQ=12
+MADWIFI_COL_TCP_ACK_SEQ=13
 
 madwifi_start_timing_logging_on_all_clients()
 {
@@ -82,8 +84,8 @@ madwifi_move_timing_dumpfile()
 	local filename=$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
 	local src=$MADWIFI_TIMING_DUMPFILE_DIR/$filename
 	local dst=$destdir/$filename
-	copy_file_from_host root $host $src $dst
-	delete_file_on_host $host $src
+	remote_copy_file_from_host root $host $src $dst
+	remote_delete_file_on_host $host $src
 	madwifi_clean_timing_dumpfile $dst
 }
 

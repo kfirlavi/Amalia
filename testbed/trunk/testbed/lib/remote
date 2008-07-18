@@ -3,7 +3,7 @@
 # Globals
 CLIENT_NAME_PREFIX="client"
 
-run_command_on_client()
+remote_run_command_on_client()
 {
 	local user=$1
 	local host=$2
@@ -12,7 +12,15 @@ run_command_on_client()
 	verbose "$host $(ssh $user@$host "$command")" "-e"
 }
 
-copy_file_to_host()
+remote_load_kernel_module_on_client()
+{
+	local host=$1
+	local module=$2
+	verbose "loading '$module' on client $host"
+	verbose "$host $(ssh root@$host "modprobe $module")" "-e"
+}
+
+remote_copy_file_to_host()
 {
 	local user=$1
 	local host=$2
@@ -21,7 +29,7 @@ copy_file_to_host()
 	verbose "$(scp $file $user@$host:/tmp)"
 }
 
-copy_file_from_host()
+remote_copy_file_from_host()
 {
 	local user=$1
 	local host=$2
@@ -31,7 +39,7 @@ copy_file_from_host()
 	verbose "$(scp $file $user@$host:$src $dst)"
 }
 
-delete_file_on_host()
+remote_delete_file_on_host()
 {
 	local host=$1
 	local file=$2
@@ -39,14 +47,14 @@ delete_file_on_host()
 	ssh root@$host "rm -f $file" > /dev/null
 }
 
-run_command_on_all_clients()
+remote_run_command_on_all_clients()
 {
 	local user=$1
 	local command=$2
 	local pids=
 	for c in $CLIENTS
 	do
-		run_command_on_client $user "$CLIENT_NAME_PREFIX$c" "$command" &
+		remote_run_command_on_client $user "$CLIENT_NAME_PREFIX$c" "$command" &
 		pids="$pids $(echo $!)"
 	done
 	# wait for jobs to finish

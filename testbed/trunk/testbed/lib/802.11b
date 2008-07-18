@@ -56,8 +56,8 @@ wireless_802_11b_generate_set_commands()
 wireless_802_11b_set_network()
 {
 	verbose "set on all clients and ap 802.11b flags"
-	run_command_on_all_clients root "$(wireless_802_11b_generate_set_commands ath0)"
-	verbose "$(run_command_on_all_clients root "$(wireless_802_11b_generate_get_commands ath0)")"
-	run_command_on_client root ap "$(wireless_802_11b_generate_set_commands ath1)"
-	verbose "$(run_command_on_client root ap "$(wireless_802_11b_generate_get_commands ath1)")"
+	remote_run_command_on_all_clients root "$(wireless_802_11b_generate_set_commands ath0)"
+	verbose "$(remote_run_command_on_all_clients root "$(wireless_802_11b_generate_get_commands ath0)")"
+	remote_run_command_on_client root ap "$(wireless_802_11b_generate_set_commands ath1)"
+	verbose "$(remote_run_command_on_client root ap "$(wireless_802_11b_generate_get_commands ath1)")"
 }

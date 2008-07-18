@@ -347,6 +347,6 @@ tcpdump_move_dumpfile()
 	local filename=$host$TCPDUMP_CLIENTS_DUMPFILE_SUFFIX
 	local src=$TCPDUMP_CLIENTS_DUMPFILE_DIRECTORY/$filename
 	local dst=$destdir/$filename
-	copy_file_from_host root $host $src $dst
-	delete_file_on_host $host $src
+	remote_copy_file_from_host root $host $src $dst
+	remote_delete_file_on_host $host $src
 }
