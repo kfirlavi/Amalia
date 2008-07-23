@@ -106,6 +106,7 @@ make_results_dir()
 	local bandwidth=$2
 	local dir="$TEST_OUTPUT_DIR/time.${duration}.bandwidth.${bandwidth}"
 	create_directory $dir
+	echo $dir
 }
 
 # save the state information of the client
@@ -151,7 +152,7 @@ run_single_test()
 	local first_run=
 	local pids=
 
-	local dir=`make_results_dir $t $b`
+	local dir=$(make_results_dir $t $b)
 	get_client_state $dir
 	verbose "Running $t seconds test with $b bandwidth"
 	start_logging
