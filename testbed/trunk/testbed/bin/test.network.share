@@ -73,22 +73,7 @@ check_for_required_opts()
 		usage
 		exit 1
 	fi
-
-	# or clients list or end number of clients
-	if [[ -z $END && -z $CLIENTS ]]
-	then 
-		echo "You should provide -n or -c"
-		usage
-		exit 1
-	fi
-}
-
-combine_clients_opts()
-{
-	if [[ ! -z $END ]]; then
-		# we got -n, so we'll convert to $CLIENTS
-		CLIENTS=`seq -s ' ' $START $END`
-	fi
+	check_clients_opts
 }
 
 process_options()

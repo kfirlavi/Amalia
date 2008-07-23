@@ -19,7 +19,8 @@ check_clients_opts()
 	# or clients list or end number of clients
 	if [[ -z $END && -z $CLIENTS ]]
 	then 
-		echo "You should provide -n or -c"
+		error "You should provide -n or -c"
+		echo 
 		usage
 		exit 1
 	fi
