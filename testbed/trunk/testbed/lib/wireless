@@ -11,7 +11,7 @@ wireless_atheros_set_no_accel_to_network()
 {
 	verbose "set on all clients and ap atheros no accell flags"
 	remote_run_command_on_all_clients root "iwpriv ath0 abolt $WIRELESS_ATHEROS_ABOLT && echo -n set atheros no acceleration"
-	remote_run_command_on_client root ap "iwpriv ath1 abolt $WIRELESS_ATHEROS_ABOLT && echo -n set atheros no acceleration"
+	remote_run_command_on_client root ap "iwpriv ath0 abolt $WIRELESS_ATHEROS_ABOLT && echo -n set atheros no acceleration"
 }
 
 wireless_set_all_clients_minimum_txpower()
@@ -19,5 +19,5 @@ wireless_set_all_clients_minimum_txpower()
 	verbose "set on all clients txpower = ${WIRELESS_TXPOWER_MIN}dBm"
 	remote_run_command_on_all_clients root "iwconfig ath0 txpower $WIRELESS_TXPOWER_MIN 2>/dev/null && echo -n set clients to txpower=${WIRELESS_TXPOWER_MIN} dBm"
 	verbose "set txpower = ${WIRELESS_TXPOWER_MIN}dBm on ap"
-	remote_run_command_on_client root ap "iwpriv ath1 txpower $WIRELESS_TXPOWER_MIN 2>/dev/null && echo -n set ap to txpower=${WIRELESS_TXPOWER_MIN} dBm"
+	remote_run_command_on_client root ap "iwpriv ath0 txpower $WIRELESS_TXPOWER_MIN 2>/dev/null && echo -n set ap to txpower=${WIRELESS_TXPOWER_MIN} dBm"
 }

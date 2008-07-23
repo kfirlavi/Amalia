@@ -129,7 +129,7 @@ get_client_state()
 
 start_logging()
 {
-	tcpdump_start_logging ap ath1 $IPERF_PORT
+	tcpdump_start_logging ap ath0 $IPERF_PORT
 	tcpdump_start_logging src eth0 $IPERF_PORT
 	madwifi_start_timing_logging_on_all_clients
 }

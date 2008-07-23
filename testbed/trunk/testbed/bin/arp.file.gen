@@ -27,7 +27,7 @@ main()
 		ethers="${ethers}wclient$c $mac\n"
 	done
 
-	mac=`get_mac_address ap ath1`
+	mac=`get_mac_address ap ath0`
 	ethers="${ethers}wap $mac\n"
 
 	mac=`get_mac_address src eth0`
