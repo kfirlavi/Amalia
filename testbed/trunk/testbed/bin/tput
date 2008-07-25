@@ -83,7 +83,7 @@ find_max_bandwidth()
 	local dst=$2
 	local time=$3
 	local bandwidth=$4
-	kill_iperf $src
+	iperf_kill_process $src
 	verbose "Run iperf on $src -> $dst"
 	local loss=-1
 	while [[ $loss != 0 ]]; do
@@ -101,7 +101,7 @@ main()
 	process_options
 	# don't create dest iperf if -k is on
 	if [[ -z $DONT_LOAD_DST_SERVER ]]; then
-		set_dest_iperf $DST_UTIL
+		iperf_run_udp_server $DST_UTIL
 	fi
 	if [[ -z $ONCE ]]; then
 		find_max_bandwidth $SRC_UTIL $DST_TEST $TIME $BANDWITH

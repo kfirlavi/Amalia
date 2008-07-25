@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+source $LIB_PATH/remote
+
+# Globals
+TCP_CLIENT_PROBE_LOG_FILE=/tmp/tcpporbe
+TCP_TCPPROBE_PROC_FILE=/proc/net/tcpprobe
+TCP_TCPPROBE_LOG_SUFFIX=tcpprobe
+TCP_WINDOW="10m" # default 10 MB window
+
+tcp_change_ca_algorithm_on_client()
+{
+	local algorithm=$1
+	local host=$2
+	local module="tcp_$algorithm"
+	verbose "loading $algorithm on $host"
+	[[ $algorithm -ne "reno" ]] && remote_load_kernel_module_on_client $host $module
+	remote_run_command_on_client root $host "echo $algorithm > /proc/sys/net/ipv4/tcp_congestion_control"
+}
+
+tcp_start_tcpprobe_logging()
+{
+	local host=$1
+	local dumpfile=$TCP_CLIENT_PROBE_LOG_FILE
+	verbose "Running tcp_probe on $host"
+	remote_load_kernel_module_on_client $host "tcp_probe"
+	ssh root@$host "cat $TCP_TCPPROBE_PROC_FILE > $dumpfile" 2> /dev/null &
+}
+
+tcp_stop_tcpprobe_logging()
+{
+	local host=$1
+	verbose "stop tcp_probe on $host"
+	remote_run_command_on_client root $host "ps -ef | grep $TCP_TCPPROBE_PROC_FILE | grep -v grep | awk '{print \$2}' | xargs kill"
+}
+
+tcp_save_tcpprobe_log_file()
+{
+	local host=$1
+	local dst_dir=$2
+	local src=$TCP_CLIENT_PROBE_LOG_FILE
+	local dst=$dst_dir/$host.$TCP_TCPPROBE_LOG_SUFFIX
+	remote_copy_file_from_host root $host $src $dst
+	remote_delete_file_on_host $host $src
+}

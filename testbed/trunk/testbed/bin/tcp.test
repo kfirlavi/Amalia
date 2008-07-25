@@ -1,0 +1,172 @@
+#!/bin/bash
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+source $LIB_PATH/opts
+source $LIB_PATH/tcpdump
+source $LIB_PATH/802.11b
+source $LIB_PATH/wireless
+source $LIB_PATH/madwifi
+source $LIB_PATH/tcp
+source $LIB_PATH/iperf
+source $LIB_PATH/router
+
+# Globals
+END=
+CLIENTS=
+TEST_OUTPUT_DIR=
+TIMES=
+PLOTS= # default no plots
+NO_PLOTS= # Initial value will generate plots
+DIR_FOR_PLOTS="plots"
+STATES_RELATIVE_DIR="states"
+NUMBER_OF_UDP_CLIENTS=
+LINK_CAPASITY=40 # total mb the network can handle
+IPERF_UDP_PORT=5001
+IPERF_TCP_PORT=5002
+
+usage()
+{
+	prog=`basename $0`
+	cat <<- EOF
+		usage: $prog -d directory -t seconds -u number [-w size] [-p] [-v]
+
+		will run TCP related tests
+
+		EXAMPLE: $prog  -d test_dir -t "10,20,300" -d "100,150" -n 16 -v
+
+		OPTIONS:
+			-d	directory for results
+			-t	times in seconds to test
+			-u	number of backround udp clients
+			-w	tcp window size (default 10MB)
+			-p	generate just plots (without running experiment)
+			-g	don't generate plots
+			-h	Show this message
+			-v 	verbose
+			-x	debug
+		EOF
+}
+
+get_opts()
+{
+	while getopts "d:t:u:w:pgvhx" options; do
+		case $options in
+			d) TEST_OUTPUT_DIR=$OPTARG;;
+			t) TIMES=`echo $OPTARG | tr ',' ' '`;;
+			u) NUMBER_OF_UDP_CLIENTS=$OPTARG;;
+			p) PLOTS=1;;
+			g) NO_PLOTS=1;;
+			v) VERBOSE=1;;
+			x) DEBUG=1;;
+			h) usage
+			   exit;;
+			*) usage
+			   exit 1;;
+		esac
+	done
+}
+
+check_for_required_opts()
+{
+	if [[ -z $TEST_OUTPUT_DIR || -z $TIMES ]]
+	then 
+		usage
+		exit 1
+	fi
+}
+
+process_options()
+{
+	check_for_no_opts
+	get_opts $OPTS
+	check_for_required_opts
+	[[ -z $PLOTS ]] && check_directory $TEST_OUTPUT_DIR
+}
+
+make_results_dir()
+{
+	local duration=$1
+	local dir="$TEST_OUTPUT_DIR/time.${duration}"
+	create_directory $dir
+	echo $dir
+}
+
+start_logging()
+{
+	local host=$1
+	madwifi_start_timing_logging $host
+	tcp_start_tcpprobe_logging $host
+}
+
+stop_logging()
+{
+	local host=$1
+	local dir=$2
+	tcp_stop_tcpprobe_logging $host
+	tcp_save_tcpprobe_log_file $host $dir
+	madwifi_stop_timing_logging $host
+	madwifi_move_timing_dumpfile $host $dir
+}
+
+run_iperf_servers()
+{
+	iperf_run_udp_server src 2>&1 > /dev/null &
+	iperf_run_tcp_server src 2>&1 > /dev/null &
+}
+
+generate_udp_background_flows()
+{
+	local n=$NUMBER_OF_UDP_CLIENTS
+	local tcp_client="client$((n+1))"
+	local bandwidth=$(echo $LINK_CAPASITY/$n | bc)
+	local t=$TIMES
+	local first_run=
+	local pids=
+	local dir=$(make_results_dir $t)
+
+	run_iperf_servers
+	tcp_change_ca_algorithm_on_client reno src
+	tcp_change_ca_algorithm_on_client reno $tcp_client
+	start_logging $tcp_client
+
+	for c in $(seq 1 $n)
+	do 
+		verbose "Running iperf UDP on client$c for $t sec with $bandwidth mb"
+		local tput_options="-o -s client$c -u src -d wsrc -t $t -b $bandwidth -v"
+		[[ -n $first_run ]] && tput_options="$tput_options -k"
+		tput  $tput_options 2>&1 >> "$dir/UDP.client${c}.time.$t.bandwidth.$bandwidth" &
+		pids="$pids $!"
+		first_run=1
+	done
+
+	verbose "Running iperf TCP on $tcp_client for $t sec"
+	iperf_run_tcp_client_once $tcp_client wsrc $t 2>&1 >> "$dir/TCP.$tcp_client.time.$t" &
+	pids="$pids $!"
+	wait_for_pids $pids
+	stop_logging $tcp_client $dir
+}
+
+set_wireless()
+{
+	wireless_atheros_set_no_accel_to_network
+	wireless_set_all_clients_minimum_txpower
+	wireless_802_11b_set_network
+}
+
+run_test()
+{
+	set_wireless
+	generate_udp_background_flows
+}
+
+main()
+{
+	process_options
+	if [[ -z $PLOTS ]]; then
+		run_test
+	fi
+}
+main

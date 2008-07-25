@@ -1,9 +1,15 @@
 #!/bin/bash
 
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
 source $LIB_PATH/io
 source $LIB_PATH/remote
+source $LIB_PATH/tcp
 
 # Globals
+IPERF_UDP_PORT=5001
+IPERF_TCP_PORT=5001
 
 
 # need to delete this function when find a solution to the >&2
@@ -27,36 +33,56 @@ iperf_verbose_yes_no()
 }
 
 # gets host
-kill_iperf()
+iperf_kill_process()
 {
 	local host=$1
-	is_iperf_running_on $host
+	local protocol=$2 # udp,tcp default is killing all
+	iperf_check_if_iperf_running $host $protocol
 	local running=$?
+	local kill_command="killall iperf"
+	case $protocol in
+		udp) kill_command="ps -ef | grep iperf | grep $IPERF_UDP_PORT | grep -v grep | awk '{print \$2}' | xargs kill" ;;
+		tcp) kill_command="ps -ef | grep iperf | grep $IPERF_TCP_PORT | grep -v grep | awk '{print \$2}' | xargs kill" ;;
+	esac
 	while [[ $running == 0 ]]; do
 		iperf_verbose "Killing iperf..."
-		ssh root@$host "killall iperf"
-		is_iperf_running_on $host
+		verbose "killing iperf $protocol on $host"
+		ssh root@$host $kill_command
+		iperf_check_if_iperf_running $host $protocol
 		running=$?
 	done
 }
 
 # gets host
-is_iperf_running_on()
+iperf_check_if_iperf_running()
 {
 	local host=$1
+	local protocol=$2 # udp, tcp or default is all
 	iperf_verbose "Checking if iperf is running on $host..." "-n"
-	ssh root@$host "ps fax | grep iperf | grep -v grep" > /dev/null
+	local command="ps fax | grep iperf | grep -v grep"
+	case $protocol in
+		udp) command="ps -ef | grep iperf | grep $IPERF_UDP_PORT | grep -v grep" ;;
+		tcp) command="ps -ef | grep iperf | grep $IPERF_TCP_PORT | grep -v grep" ;;
+	esac
+	ssh root@$host "$command" > /dev/null
 	local ret=$?
 	iperf_verbose_yes_no $ret
 	return $ret
 }
 
 # gets host 
-is_iperf_listening()
+iperf_check_if_it_listen()
 {
 	local host=$1
+	local protocol=$2 # udp, tcp or nothing means all
 	iperf_verbose "Checking if $host is listening..." "-n"
-	ssh root@$host "netstat -p | grep iperf" > /dev/null
+	local command="netstat --listening --program --$protocol"
+	case $protocol in
+		udp) command="$command --udp" ;;
+		tcp) command="$command --tcp" ;;
+	esac
+	command="$command | grep iperf"
+	ssh root@$host "$command" > /dev/null
 	local ret=$?
 	iperf_verbose_yes_no $ret
 	return $ret
@@ -64,17 +90,17 @@ is_iperf_listening()
 
 # runs iperf sever on destination
 # gets destination utility address
-set_dest_iperf()
+iperf_run_udp_server()
 {
 	local dst=$1
-	kill_iperf $dst
-	is_iperf_listening $dst
+	iperf_kill_process $dst udp
+	iperf_check_if_it_listen $dst udp
 	local listen=$?
 	while [[ $listen > 0 ]]; do
 		iperf_verbose "Setup iperf on $dst"
-		ssh root@$dst "iperf --udp --server --interval 1 --format m" > /tmp/$dst.iperf &
+		ssh root@$dst "iperf --udp --server --port $IPERF_UDP_PORT --interval 1 --format m" > /tmp/$dst.iperf &
 		sleep 2
-		is_iperf_listening $dst
+		iperf_check_if_it_listen $dst udp
 		local listen=$?
 	done
 }
@@ -98,11 +124,37 @@ run_iperf_client_once()
 	local dst=$2
 	local time=$3
 	local bandwidth=$4
-	kill_iperf $src
+	iperf_kill_process $src udp
 	iperf_verbose "Run iperf on $src -> $dst"
-	local ret=`ssh root@$src "iperf --udp --client $dst --time $time --bandwidth ${bandwidth}m"`
+	local ret=$(ssh root@$src "iperf --udp --port $IPERF_UDP_PORT --client $dst --time $time --bandwidth ${bandwidth}m")
 	iperf_verbose "$ret"
-	local loss=`get_loss_from_iperf_client_output "$ret"`
+	local loss=$(get_loss_from_iperf_client_output "$ret")
 	iperf_verbose "iperf $src -> $dst time:$time bandwidth:${bandwidth}m loss:$loss"
 }
 
+# run a server on $dst with TCP protocol
+iperf_run_tcp_server()
+{
+	local dst=$1
+	iperf_kill_process $dst tcp
+	iperf_check_if_it_listen $dst tcp
+	local listen=$?
+	while [[ $listen > 0 ]]; do
+		iperf_verbose "Setup iperf TCP server on $dst"
+		ssh root@$dst "iperf --server --port $IPERF_TCP_PORT --window $TCP_WINDOW --interval 1 --format m" > /tmp/$dst.iperf &
+		sleep 2
+		iperf_check_if_it_listen $dst tcp
+		local listen=$?
+	done
+}
+
+iperf_run_tcp_client_once()
+{
+	local src=$1
+	local dst=$2
+	local time=$3
+	iperf_kill_process $src tcp
+	iperf_verbose "Run iperf TCP on $src -> $dst"
+	local ret=$(ssh root@$src "iperf --port $IPERF_TCP_PORT --window $TCP_WINDOW --client $dst --time $time")
+	iperf_verbose "$ret"
+}

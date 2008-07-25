@@ -26,7 +26,7 @@ remote_copy_file_to_host()
 	local host=$2
 	local file=$3
 	verbose "copying file $file to $host"
-	verbose "$(scp $file $user@$host:/tmp)"
+	scp $file $user@$host:/tmp > /dev/null
 }
 
 remote_copy_file_from_host()
@@ -36,7 +36,7 @@ remote_copy_file_from_host()
 	local src=$3
 	local dst=$4
 	verbose "copying file $user@$host:$src to $dst"
-	verbose "$(scp $file $user@$host:$src $dst)"
+	scp $file $user@$host:$src $dst > /dev/null
 }
 
 remote_delete_file_on_host()

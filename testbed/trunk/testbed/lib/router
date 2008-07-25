@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+source $LIB_PATH/remote
+
+# Globals
+ROUTER_DELAYS=0
+ROUTER_DEFAULT_SRC_NETWORK="193.168.1.3"
+ROUTER_DEFAULT_DST_NETWORK="193.168.1.4"
+
+# Usage: dummynet rtt-ms rate-mb queue-ratio [lossrate]
+function router_set_dummynet()
+{
+	local latency=$(($1 / 2))ms # rtt in ms
+	local bandwidth=$2Mbit/s # rate in mb
+	local queue=$(echo "$1*$2*$3*1000/8" | bc)
+	local lossrate=${4}
+	local src_network=$ROUTER_DEFAULT_SRC_NETWORK
+	local dst_network=$ROUTER_DEFAULT_DST_NETWORK
+
+	local command="\
+		kldstat |grep dummynet &>/dev/null || kldload dummynet; \
+		ipfw -f -q flush; ipfw -f -q pipe flush;  sleep 1;    \
+		ipfw -q add pipe 1 ip from $src_network to $dst_network in       && \
+		ipfw -q add pipe 2 ip from $dst_network to $src_network out      && \
+		ipfw pipe 1 config bandwidth $bandwidth queue ${queue}B delay $latency plr $lossrate  && \
+		ipfw pipe 2 config bandwidth $bandwidth queue ${queue}B delay $latency"
+	remote_run_command_on_client root router $command
+}
