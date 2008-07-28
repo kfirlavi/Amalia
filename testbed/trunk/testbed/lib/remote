@@ -54,7 +54,10 @@ remote_run_command_on_all_clients()
 	local pids=
 	for c in $CLIENTS
 	do
-		remote_run_command_on_client $user "$CLIENT_NAME_PREFIX$c" "$command" &
+		local client=$c
+		# check if client is a number or a word like ap,src...
+		[[ $c < "a" ]] && client="$CLIENT_NAME_PREFIX$c"
+		remote_run_command_on_client $user $client "$command" &
 		pids="$pids $(echo $!)"
 	done
 	# wait for jobs to finish
