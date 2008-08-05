@@ -124,7 +124,7 @@ wait_for_pids()
 	local pids="$@"
 	for p in $pids
 	do
-		verbose "waiting for pid $p to finish"
+		debug "waiting for pid $p to finish"
 		wait $p
 	done
 }

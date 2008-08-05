@@ -128,6 +128,7 @@ end_logging()
 	done
 	madwifi_stop_timing_logging_on_all_clients
 	madwifi_move_timing_dumpfile_for_all_clients $dir
+	madwifi_filter_udp_packet_size_from_timing_dumpfile_for_all_clients $dir
 }
 
 run_single_test()

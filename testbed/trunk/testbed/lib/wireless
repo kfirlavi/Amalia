@@ -6,12 +6,13 @@ source $LIB_PATH/remote
 # Globals
 WIRELESS_ATHEROS_ABOLT=0
 WIRELESS_TXPOWER_MIN=0
+WIRELESS_TXQUEUE_LENGTH_MIN=1
 
 wireless_atheros_set_no_accel_to_network()
 {
 	verbose "set on all clients and ap atheros no accell flags"
-	remote_run_command_on_all_clients root "iwpriv ath0 abolt $WIRELESS_ATHEROS_ABOLT && echo -n set atheros no acceleration"
-	remote_run_command_on_client root ap "iwpriv ath0 abolt $WIRELESS_ATHEROS_ABOLT && echo -n set atheros no acceleration"
+	remote_run_command_on_all_clients root "iwpriv ath0 abolt $WIRELESS_ATHEROS_ABOLT"
+	remote_run_command_on_client root ap "iwpriv ath0 abolt $WIRELESS_ATHEROS_ABOLT"
 }
 
 wireless_set_all_clients_minimum_txpower()
@@ -20,4 +21,19 @@ wireless_set_all_clients_minimum_txpower()
 	remote_run_command_on_all_clients root "iwconfig ath0 txpower $WIRELESS_TXPOWER_MIN 2>/dev/null && echo -n set clients to txpower=${WIRELESS_TXPOWER_MIN} dBm"
 	verbose "set txpower = ${WIRELESS_TXPOWER_MIN}dBm on ap"
 	remote_run_command_on_client root ap "iwpriv ath0 txpower $WIRELESS_TXPOWER_MIN 2>/dev/null && echo -n set ap to txpower=${WIRELESS_TXPOWER_MIN} dBm"
+}
+
+wireless_set_wifi0_txqueue_length_to_minimum()
+{
+	local host=$1
+	wireless_set_txqueue_length $host wifi0 $WIRELESS_TXQUEUE_LENGTH_MIN
+}
+
+wireless_set_txqueue_length()
+{
+	local host=$1
+	local iface=$2 # the interface to change. For wireless it should be wifi0 (ath0 is a virtual, and so its txqueuelen is 0)
+	local len=$3
+	verbose "Set $iface txqueuelen to $len on $host"
+	remote_run_command_on_client root $host "ifconfig $iface txqueuelen $len"
 }

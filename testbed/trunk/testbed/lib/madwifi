@@ -8,7 +8,7 @@ source $LIB_PATH/remote
 # Globals
 MADWIFI_TIMING_DUMPFILE_DIR="/tmp"
 MADWIFI_TIMING_DUMPFILE_SUFFIX=".madwifi.timing"
-MADWIFI_TIMING_PACKET_SIZE=1534 # this is for filtering 
+MADWIFI_TIMING_UDP_PACKET_SIZE=1534 # this is for filtering 
 MADWIFI_TIMING_LINE_DESCRIPTOR="MADWIFI_DELAY_TIMESTAMPS" 
 MADWIFI_PNG_SIZE="400,300"
 MADWIFI_PNG_DOUBLE_SIZE="800,300"
@@ -61,6 +61,18 @@ madwifi_move_timing_dumpfile_for_all_clients()
 	wait_for_pids $pids
 }
 
+madwifi_filter_udp_packet_size_from_timing_dumpfile_for_all_clients()
+{
+	local destdir=$1
+	local pids=
+	for c in $CLIENTS
+	do 
+		madwifi_filter_udp_packet_size_from_timing_dumpfile "client$c" $destdir &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+}
+
 madwifi_start_timing_logging()
 {
 	local host=$1
@@ -94,10 +106,18 @@ madwifi_clean_timing_dumpfile()
 	local file=$1
 	local tempfile=$(create_temp_file)
 	verbose "Cleaning $file from kernel messages and $MADWIFI_TIMING_LINE_DESCRIPTOR"
-	cat $file | cut -f 2- > $tempfile
-	# filter by packet size
-	verbose "Filtering $file by packet size $MADWIFI_TIMING_PACKET_SIZE"
-	grep $MADWIFI_TIMING_PACKET_SIZE $tempfile > $file
+	cat $file | cut -f 2- > $tempfile \
+	&& cp $tempfile $file
+	release_temp_file $tempfile
+}
+
+madwifi_filter_udp_packet_size_from_timing_dumpfile()
+{
+	local file=$1
+	local tempfile=$(create_temp_file)
+	verbose "Filtering $file by packet size $MADWIFI_TIMING_UDP_PACKET_SIZE"
+	cp $file $tempfile
+	grep $MADWIFI_TIMING_UDP_PACKET_SIZE $tempfile > $file
 	release_temp_file $tempfile
 }
 

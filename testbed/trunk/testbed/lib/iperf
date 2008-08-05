@@ -32,17 +32,20 @@ iperf_verbose_yes_no()
 	fi
 }
 
-# gets host
 iperf_kill_process()
 {
 	local host=$1
 	local protocol=$2 # udp,tcp default is killing all
+	local client=$3
 	iperf_check_if_iperf_running $host $protocol
 	local running=$?
 	local kill_command="killall iperf"
+	local command_prefix="ps -ef | grep iperf | grep"
+	[[ -n $clinet ]] && command_prefix="$command_prefix $client | grep"
+	local command_suffix="| grep -v grep | tr -s ' ' | cut -d ' ' -f 2 | xargs kill"
 	case $protocol in
-		udp) kill_command="ps -ef | grep iperf | grep $IPERF_UDP_PORT | grep -v grep | awk '{print \$2}' | xargs kill" ;;
-		tcp) kill_command="ps -ef | grep iperf | grep $IPERF_TCP_PORT | grep -v grep | awk '{print \$2}' | xargs kill" ;;
+		udp) kill_command="$command_prefix $IPERF_UDP_PORT $command_suffix" ;;
+		tcp) kill_command="$command_prefix $IPERF_TCP_PORT $command_suffix" ;;
 	esac
 	while [[ $running == 0 ]]; do
 		iperf_verbose "Killing iperf..."
@@ -53,16 +56,33 @@ iperf_kill_process()
 	done
 }
 
+iperf_kill_on_all_testbed()
+{
+	local pids=
+	for host in ap src $(echo " $CLIENTS" | sed 's/ / client/g')
+	do 
+		iperf_kill_process $host udp 2>&1 > /dev/null &
+		pids="$pids $!"
+		iperf_kill_process $host tcp 2>&1 > /dev/null &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+}
+
 # gets host
 iperf_check_if_iperf_running()
 {
 	local host=$1
 	local protocol=$2 # udp, tcp or default is all
+	local client=$3
 	iperf_verbose "Checking if iperf is running on $host..." "-n"
 	local command="ps fax | grep iperf | grep -v grep"
+	local command_prefix="ps -ef | grep iperf | grep"
+	[[ -n $clinet ]] && command_prefix="$command_prefix $client | grep"
+	local command_suffix="| grep -v grep"
 	case $protocol in
-		udp) command="ps -ef | grep iperf | grep $IPERF_UDP_PORT | grep -v grep" ;;
-		tcp) command="ps -ef | grep iperf | grep $IPERF_TCP_PORT | grep -v grep" ;;
+		udp) command="$command_prefix $IPERF_UDP_PORT $command_suffix" ;;
+		tcp) command="$command_prefix $IPERF_TCP_PORT $command_suffix" ;;
 	esac
 	ssh root@$host "$command" > /dev/null
 	local ret=$?
@@ -125,6 +145,7 @@ run_iperf_client_once()
 	local time=$3
 	local bandwidth=$4
 	iperf_kill_process $src udp
+	verbose "Run iperf udp on $src -> $dst port=$IPERF_TCP_PORT with time=$time and bandwidth=$bandwidth"
 	iperf_verbose "Run iperf on $src -> $dst"
 	local ret=$(ssh root@$src "iperf --udp --port $IPERF_UDP_PORT --client $dst --time $time --bandwidth ${bandwidth}m")
 	iperf_verbose "$ret"
@@ -153,7 +174,8 @@ iperf_run_tcp_client_once()
 	local src=$1
 	local dst=$2
 	local time=$3
-	iperf_kill_process $src tcp
+	iperf_kill_process $src tcp $dst
+	verbose "Run iperf tcp on $src -> $dst port=$IPERF_TCP_PORT with time=$time and window=$TCP_WINDOW"
 	iperf_verbose "Run iperf TCP on $src -> $dst"
 	local ret=$(ssh root@$src "iperf --port $IPERF_TCP_PORT --window $TCP_WINDOW --client $dst --time $time")
 	iperf_verbose "$ret"

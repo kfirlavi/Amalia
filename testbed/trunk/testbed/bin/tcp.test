@@ -18,6 +18,7 @@ END=
 CLIENTS=
 TEST_OUTPUT_DIR=
 TIMES=
+TCP_SOURCE=
 PLOTS= # default no plots
 NO_PLOTS= # Initial value will generate plots
 DIR_FOR_PLOTS="plots"
@@ -35,11 +36,15 @@ usage()
 
 		will run TCP related tests
 
-		EXAMPLE: $prog  -d test_dir -t "10,20,300" -d "100,150" -n 16 -v
+		EXAMPLE: $prog  -d test_dir -t "10,20,300" -u 2 -v
 
 		OPTIONS:
 			-d	directory for results
 			-t	times in seconds to test
+			-s	by default clients are the source, this will 
+				make wsrc as the source and clients as the destinations
+			-n	number of clients to test together
+			-c	clients (just a list of clients eg. "3,16,7,9")
 			-u	number of backround udp clients
 			-w	tcp window size (default 10MB)
 			-p	generate just plots (without running experiment)
@@ -52,10 +57,13 @@ usage()
 
 get_opts()
 {
-	while getopts "d:t:u:w:pgvhx" options; do
+	while getopts "d:t:n:c:u:w:spgvhx" options; do
 		case $options in
 			d) TEST_OUTPUT_DIR=$OPTARG;;
 			t) TIMES=`echo $OPTARG | tr ',' ' '`;;
+			s) TCP_SOURCE="wsrc";;
+			n) END=$OPTARG;;
+			c) CLIENTS=`echo $OPTARG | tr ',' ' '`;;
 			u) NUMBER_OF_UDP_CLIENTS=$OPTARG;;
 			p) PLOTS=1;;
 			g) NO_PLOTS=1;;
@@ -76,6 +84,7 @@ check_for_required_opts()
 		usage
 		exit 1
 	fi
+	check_clients_opts
 }
 
 process_options()
@@ -84,6 +93,7 @@ process_options()
 	get_opts $OPTS
 	check_for_required_opts
 	[[ -z $PLOTS ]] && check_directory $TEST_OUTPUT_DIR
+	combine_clients_opts
 }
 
 make_results_dir()
@@ -96,19 +106,26 @@ make_results_dir()
 
 start_logging()
 {
-	local host=$1
-	madwifi_start_timing_logging $host
-	tcp_start_tcpprobe_logging $host
+	local tcpprobe_host=$1
+	local madwifi_host=$2
+	local tcpdump_host=$3
+	tcp_start_tcpprobe_logging $tcpprobe_host
+	madwifi_start_timing_logging $madwifi_host
+	tcpdump_start_logging $madwifi_host ath0 $IPERF_TCP_PORT
 }
 
 stop_logging()
 {
-	local host=$1
-	local dir=$2
-	tcp_stop_tcpprobe_logging $host
-	tcp_save_tcpprobe_log_file $host $dir
-	madwifi_stop_timing_logging $host
-	madwifi_move_timing_dumpfile $host $dir
+	local tcpprobe_host=$1
+	local madwifi_host=$2
+	local tcpdump_host=$3
+	local dir=$4
+	tcp_stop_tcpprobe_logging $tcpprobe_host
+	tcp_save_tcpprobe_log_file $tcpprobe_host $dir
+	madwifi_stop_timing_logging $madwifi_host
+	madwifi_move_timing_dumpfile $madwifi_host $dir
+	tcpdump_stop_logging $tcpdump_host
+	tcpdump_move_dumpfile $tcpdump_host $dir
 }
 
 run_iperf_servers()
@@ -130,6 +147,7 @@ generate_udp_background_flows()
 	run_iperf_servers
 	tcp_change_ca_algorithm_on_client reno src
 	tcp_change_ca_algorithm_on_client reno $tcp_client
+	wireless_set_wifi0_txqueue_length_to_minimum $tcp_client
 	start_logging $tcp_client
 
 	for c in $(seq 1 $n)
@@ -149,6 +167,53 @@ generate_udp_background_flows()
 	stop_logging $tcp_client $dir
 }
 
+run_iperf_server_on_all_clients()
+{
+	local tcp_algorithm=$1
+	local pids=
+	iperf_kill_on_all_testbed
+
+	for c in $CLIENTS
+	do 
+		local client="client$c"
+		tcp_change_ca_algorithm_on_client $tcp_algorithm $client &
+		pids="$pids $!"
+		wireless_set_wifi0_txqueue_length_to_minimum $client &
+		pids="$pids $!"
+		iperf_run_tcp_server $client 2>&1 > /dev/null &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+}
+
+run_tcp_flow_from_src_to_clients()
+{
+	local dir=$1
+	local pids=
+	for c in $CLIENTS
+	do 
+		local src="src"
+		local dst="wclient$c"
+		local log="$dir/TCP.flow.from.$src.to.$dst.for.time.$t"
+		iperf_run_tcp_client_once $src $dst $t 2>&1 >> $log &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+}
+
+generate_tcp_flows()
+{
+	local t=$TIMES
+	local dir=$(make_results_dir $t)
+
+	tcp_change_ca_algorithm_on_client reno src
+	start_logging src ap ap
+	run_iperf_server_on_all_clients reno
+	run_tcp_flow_from_src_to_clients $dir
+	stop_logging src ap ap $dir
+	iperf_kill_on_all_testbed
+}
+
 set_wireless()
 {
 	wireless_atheros_set_no_accel_to_network
@@ -159,7 +224,11 @@ set_wireless()
 run_test()
 {
 	set_wireless
-	generate_udp_background_flows
+	if [[ -z $TCP_SOURCE ]]; then
+		generate_udp_background_flows
+	else
+		generate_tcp_flows
+	fi
 }
 
 main()

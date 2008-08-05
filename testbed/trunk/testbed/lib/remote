@@ -9,7 +9,7 @@ remote_run_command_on_client()
 	local host=$2
 	local command=$3
 	verbose "executing '$command' on client $host"
-	verbose "$host $(ssh $user@$host "$command")" "-e"
+	ssh $user@$host "$command"
 }
 
 remote_load_kernel_module_on_client()
@@ -17,7 +17,7 @@ remote_load_kernel_module_on_client()
 	local host=$1
 	local module=$2
 	verbose "loading '$module' on client $host"
-	verbose "$host $(ssh root@$host "modprobe $module")" "-e"
+	ssh root@$host "modprobe $module"
 }
 
 remote_copy_file_to_host()
@@ -58,12 +58,7 @@ remote_run_command_on_all_clients()
 		# check if client is a number or a word like ap,src...
 		[[ $c < "a" ]] && client="$CLIENT_NAME_PREFIX$c"
 		remote_run_command_on_client $user $client "$command" &
-		pids="$pids $(echo $!)"
+		pids="$pids $!"
 	done
-	# wait for jobs to finish
-	for p in $pids
-	do
-		verbose "waiting for command to finish - pid $p"
-		wait $p
-	done
+	wait_for_pids $pids
 }
