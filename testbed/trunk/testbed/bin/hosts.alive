@@ -8,7 +8,9 @@ source $LIB_PATH/remote
 source $LIB_PATH/opts
 
 # Globals
-NMAP_COMMAND="nmap -P0 -p 22" 
+NMAP_SSH_COMMAND="nmap -P0 -p 22" 
+NMAP_PING_COMMAND="nmap -sP" 
+DEAD_HOSTS_TMP_FILE=
 
 usage()
 {
@@ -57,11 +59,21 @@ process_options()
 	combine_clients_opts
 }
 
+ping_scan_on_host()
+{
+	local host=$1
+	verbose "ping scan on $host"
+	$NMAP_PING_COMMAND $host \
+		| egrep -B 2 "filtered|closed" \
+		| grep Interesting \
+		| cut -d ' ' -f 4
+}
+
 scan_host_ssh_port()
 {
 	local host=$1
 	verbose "scanning $host ssh port"
-	$NMAP_COMMAND $host \
+	$NMAP_SSH_COMMAND $host \
 		| egrep -B 2 "filtered|closed" \
 		| grep Interesting \
 		| cut -d ' ' -f 4
@@ -71,7 +83,7 @@ scan_host_ssh_port_from_remote_host()
 {
 	local src=$1
 	local dst=$2
-	remote_run_command_on_client root $src "$NMAP_COMMAND $dst" \
+	remote_run_command_on_client root $src "$NMAP_SSH_COMMAND $dst" \
 		| egrep -B 2 "filtered|closed" \
 		| grep Interesting \
 		| cut -d ' ' -f 4 
@@ -103,7 +115,13 @@ generate_list_of_testbed_hosts()
 	do
 		hosts="$hosts client$c"
 	done
-	echo $hosts
+	local hosts_up=
+	for i in $hosts
+	do
+		grep --quiet $i $DEAD_HOSTS_TMP_FILE 
+		[[ $? -gt 0 ]] && hosts_up="$hosts_up $i"
+	done
+	echo $hosts_up
 }
 
 check_connection_from_host_to_wireless_hosts()
@@ -136,10 +154,22 @@ check_connection_from_testbed_to_hosts()
 	done
 }
 
+ping_hosts()
+{
+	for h in $(generate_list_of_testbed_hosts)
+	do
+		local ret=$(ping_scan_on_host $h)
+		print_port_closed $(hostname) $h $ret
+	done
+}
+
 main()
 {
+	DEAD_HOSTS_TMP_FILE=$(create_temp_file)
 	process_options
+	ping_hosts
 	check_connection_from_testbed_to_hosts
 	check_connection_of_wireless_hosts
+	release_temp_file $DEAD_HOSTS_TMP_FILE
 }
 main

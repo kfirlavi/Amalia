@@ -118,7 +118,7 @@ iperf_run_udp_server()
 	local listen=$?
 	while [[ $listen > 0 ]]; do
 		iperf_verbose "Setup iperf on $dst"
-		ssh root@$dst "iperf --udp --server --port $IPERF_UDP_PORT --interval 1 --format m" > /tmp/$dst.iperf &
+		ssh root@$dst "iperf --udp --server --port $IPERF_UDP_PORT --interval 1 --format m" 2>&1 > /dev/null &
 		sleep 2
 		iperf_check_if_it_listen $dst udp
 		local listen=$?
@@ -162,7 +162,7 @@ iperf_run_tcp_server()
 	local listen=$?
 	while [[ $listen > 0 ]]; do
 		iperf_verbose "Setup iperf TCP server on $dst"
-		ssh root@$dst "iperf --server --port $IPERF_TCP_PORT --window $TCP_WINDOW --interval 1 --format m" > /tmp/$dst.iperf &
+		ssh root@$dst "iperf --server --port $IPERF_TCP_PORT --window $TCP_WINDOW --interval 1 --format m"  2>&1 > /dev/null &
 		sleep 2
 		iperf_check_if_it_listen $dst tcp
 		local listen=$?
