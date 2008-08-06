@@ -4,41 +4,142 @@
 LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
+source $LIB_PATH/remote
+source $LIB_PATH/opts
 
 # Globals
-CLIENT_START=1
-CLIENT_END=16
-CLIENTS=$(seq $CLIENT_START $CLIENT_END)
+NMAP_COMMAND="nmap -P0 -p 22" 
 
-scan_ssh_port_on_host_command()
+usage()
 {
-	local host=$1
-	echo "nmap -P0 -p 22 $host" 
+	prog=`basename $0`
+	cat <<- EOF
+		usage: $prog -n number [-v] [-x]
+
+		Check links between testbed hosts. It will check wired and wireless links
+		EXAMPLE: $prog  -n 16 -v -x 
+
+		OPTIONS:
+			-n	number of clients to test together
+			-c	clients (just a list of clients eg. "3,16,7,9")
+			-h	Show this message
+			-v 	verbose
+			-x	debug
+		EOF
 }
 
-get_ssh_hosts()
+get_opts()
 {
-	local pids=""
-	for c in $CLIENTS
-	do
-		$(scan_ssh_port_on_host_command client$c) \
-			| tee -a /tmp/hosts.alive.log \
-			| egrep -B 2 "filtered|closed" \
-			| grep Interesting \
-			| cut -d ' ' -f 4 &
-		pids="$pids $!"
+	while getopts "n:c:vhx" options; do
+		case $options in
+			n) END=$OPTARG;;
+			c) CLIENTS=`echo $OPTARG | tr ',' ' '`;;
+			v) VERBOSE=1;;
+			x) DEBUG=1;;
+			h) usage
+			   exit;;
+			*) usage
+			   exit 1;;
+		esac
 	done
-	ssh root@ap \
-		"$(scan_ssh_port_on_host_command wclient\{$(seq -s "," $CLIENT_START $CLIENT_END)\})" \
-		| grep -B 2 "filtered|closed" \
+}
+
+check_for_required_opts()
+{
+	check_clients_opts
+}
+
+process_options()
+{
+	check_for_no_opts
+	get_opts $OPTS
+	check_for_required_opts
+	combine_clients_opts
+}
+
+scan_host_ssh_port()
+{
+	local host=$1
+	verbose "scanning $host ssh port"
+	$NMAP_COMMAND $host \
+		| egrep -B 2 "filtered|closed" \
+		| grep Interesting \
+		| cut -d ' ' -f 4
+}
+
+scan_host_ssh_port_from_remote_host()
+{
+	local src=$1
+	local dst=$2
+	remote_run_command_on_client root $src "$NMAP_COMMAND $dst" \
+		| egrep -B 2 "filtered|closed" \
 		| grep Interesting \
 		| cut -d ' ' -f 4 
+}
 
-	wait_for_pids $pids
+print_port_closed()
+{
+	local src=$1
+	local dst=$2
+	local ret=$3
+	[[ -n $ret ]] \
+		&& error "$src -> $dst SSH port closed"
+}
+
+generate_list_of_wireless_hosts()
+{
+	local hosts="wap wsrc"
+	for c in $CLIENTS
+	do
+		hosts="$hosts wclient$c"
+	done
+	echo $hosts
+}
+
+generate_list_of_testbed_hosts()
+{
+	local hosts="ap src router"
+	for c in $CLIENTS
+	do
+		hosts="$hosts client$c"
+	done
+	echo $hosts
+}
+
+check_connection_from_host_to_wireless_hosts()
+{
+	local host=$1
+	verbose "Checking connection from $host to all wireless hosts"
+	local ret=$(scan_host_ssh_port $host)
+	[[ -n $ret ]] \
+		&& error "SSH port on $host is closed. Can't check for wireless connection from $host to wireless hosts" \
+		&& exit
+	for h in $(generate_list_of_wireless_hosts)
+	do
+		local ret=$(scan_host_ssh_port_from_remote_host $host $h)
+		print_port_closed $host $h $ret
+	done
+}
+
+check_connection_of_wireless_hosts()
+{
+	check_connection_from_host_to_wireless_hosts ap
+	check_connection_from_host_to_wireless_hosts src
+}
+
+check_connection_from_testbed_to_hosts()
+{
+	for h in $(generate_list_of_testbed_hosts)
+	do
+		local ret=$(scan_host_ssh_port $h)
+		print_port_closed $(hostname) $h $ret
+	done
 }
 
 main()
 {
-	get_ssh_hosts
+	process_options
+	check_connection_from_testbed_to_hosts
+	check_connection_of_wireless_hosts
 }
 main

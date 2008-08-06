@@ -8,7 +8,7 @@ remote_run_command_on_client()
 	local user=$1
 	local host=$2
 	local command=$3
-	verbose "executing '$command' on client $host"
+	verbose "executing '$command' on $host"
 	ssh $user@$host "$command"
 }
 
@@ -16,7 +16,7 @@ remote_load_kernel_module_on_client()
 {
 	local host=$1
 	local module=$2
-	verbose "loading '$module' on client $host"
+	verbose "loading '$module' on $host"
 	ssh root@$host "modprobe $module"
 }
 
