@@ -27,7 +27,7 @@ tcp_start_tcpprobe_logging()
 	local host=$1
 	local dumpfile=$TCP_CLIENT_PROBE_LOG_FILE
 	verbose "Running tcp_probe on $host"
-	remote_load_kernel_module_on_client $host "tcp_probe"
+	remote_load_kernel_module_on_client $host "tcp_probe port=5002 full=1"
 	ssh root@$host "cat $TCP_TCPPROBE_PROC_FILE > $dumpfile" 2> /dev/null &
 }
 
