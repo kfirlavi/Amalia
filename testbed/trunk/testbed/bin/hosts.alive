@@ -135,7 +135,7 @@ check_connection_from_host_to_wireless_hosts()
 	for h in $(generate_list_of_wireless_hosts)
 	do
 		local ret=$(scan_host_ssh_port_from_remote_host $host $h)
-		[[ -n $ret ]] && print_port_closed $(hostname) $h
+		[[ -n $ret ]] && print_port_closed $host $h
 	done
 }
 
