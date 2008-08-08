@@ -10,7 +10,7 @@ source $LIB_PATH/opts
 # Globals
 NMAP_SSH_COMMAND="nmap -P0 -p 22" 
 NMAP_PING_COMMAND="nmap -sP" 
-DEAD_HOSTS_TMP_FILE=
+DEAD_HOSTS=
 
 usage()
 {
@@ -63,10 +63,8 @@ ping_scan_on_host()
 {
 	local host=$1
 	verbose "ping scan on $host"
-	$NMAP_PING_COMMAND $host \
-		| egrep -B 2 "filtered|closed" \
-		| grep Interesting \
-		| cut -d ' ' -f 4
+	$NMAP_PING_COMMAND $host | grep --quiet "1 host up"
+	[[ $? -gt 0 ]] && echo $host #host is down
 }
 
 scan_host_ssh_port()
@@ -89,23 +87,25 @@ scan_host_ssh_port_from_remote_host()
 		| cut -d ' ' -f 4 
 }
 
+print_no_ping()
+{
+	local src=$1
+	local dst=$2
+	error "$src -> $dst no ping"
+}
+
 print_port_closed()
 {
 	local src=$1
 	local dst=$2
-	local ret=$3
-	[[ -n $ret ]] \
-		&& error "$src -> $dst SSH port closed"
+	error "$src -> $dst SSH port closed"
 }
 
 generate_list_of_wireless_hosts()
 {
-	local hosts="wap wsrc"
-	for c in $CLIENTS
-	do
-		hosts="$hosts wclient$c"
-	done
-	echo $hosts
+	echo " $(generate_list_of_testbed_hosts)" \
+		| sed 's/ router//' \
+		| sed 's/ / w/g'
 }
 
 generate_list_of_testbed_hosts()
@@ -116,10 +116,10 @@ generate_list_of_testbed_hosts()
 		hosts="$hosts client$c"
 	done
 	local hosts_up=
-	for i in $hosts
+	for h in $hosts
 	do
-		grep --quiet $i $DEAD_HOSTS_TMP_FILE 
-		[[ $? -gt 0 ]] && hosts_up="$hosts_up $i"
+		echo $DEAD_HOSTS | grep --quiet $h
+		[[ $? -ne 0 ]] && hosts_up="$hosts_up $h"
 	done
 	echo $hosts_up
 }
@@ -135,7 +135,7 @@ check_connection_from_host_to_wireless_hosts()
 	for h in $(generate_list_of_wireless_hosts)
 	do
 		local ret=$(scan_host_ssh_port_from_remote_host $host $h)
-		print_port_closed $host $h $ret
+		[[ -n $ret ]] && print_port_closed $(hostname) $h
 	done
 }
 
@@ -150,7 +150,7 @@ check_connection_from_testbed_to_hosts()
 	for h in $(generate_list_of_testbed_hosts)
 	do
 		local ret=$(scan_host_ssh_port $h)
-		print_port_closed $(hostname) $h $ret
+		[[ -n $ret ]] && print_port_closed $(hostname) $h
 	done
 }
 
@@ -159,19 +159,18 @@ ping_hosts()
 	for h in $(generate_list_of_testbed_hosts)
 	do
 		local ret=$(ping_scan_on_host $h)
-		print_port_closed $(hostname) $h $ret
+		[[ -n $ret ]] && DEAD_HOSTS="$DEAD_HOSTS $h"
+		[[ -n $ret ]] && print_no_ping $(hostname) $h
 	done
 }
 
 main()
 {
-	DEAD_HOSTS_TMP_FILE=$(create_temp_file)
 	process_options
 	io_global_testbed_lock
 	ping_hosts
 	check_connection_from_testbed_to_hosts
 	check_connection_of_wireless_hosts
-	release_temp_file $DEAD_HOSTS_TMP_FILE
 	io_global_testbed_release_lock
 }
 main
