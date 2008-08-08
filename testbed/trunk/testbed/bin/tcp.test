@@ -109,7 +109,7 @@ start_logging()
 	local tcpprobe_host=$1
 	local madwifi_host=$2
 	local tcpdump_host=$3
-	tcp_start_tcpprobe_logging $tcpprobe_host
+	tcp_start_tcpprobe_logging $tcpprobe_host $IPERF_TCP_PORT
 	madwifi_start_timing_logging $madwifi_host
 	tcpdump_start_logging $madwifi_host ath0 $IPERF_TCP_PORT
 }
