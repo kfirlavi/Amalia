@@ -19,6 +19,8 @@ DEBUG_COLOR=$COLOR_LIGHT_GREEN
 ERROR_COLOR=$COLOR_LIGHT_RED
 BOLD_COLOR=$COLOR_LIGHT_BLUE
 
+IO_LOCK_FILE="/tmp/$(hostname).lock"
+
 # gets string to output and optional options to echo (-n for example)
 verbose()
 {
@@ -129,3 +131,24 @@ wait_for_pids()
 		wait $p
 	done
 }
+
+io_global_testbed_lock()
+{
+	verbose "creating lock file: $IO_LOCK_FILE"
+	if [[ -f $IO_LOCK_FILE ]]; then
+		error "lock file exists: $IO_LOCK_FILE"
+		error "check if other user or script is already running"
+		exit 1
+	else
+		touch $IO_LOCK_FILE
+	fi
+}
+
+io_global_testbed_release_lock()
+{
+	if [[ -f $IO_LOCK_FILE ]]; then
+		verbose "releasing lock file: $IO_LOCK_FILE"
+		rm $IO_LOCK_FILE
+	fi
+}
+

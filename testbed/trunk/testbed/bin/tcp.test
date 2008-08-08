@@ -234,8 +234,10 @@ run_test()
 main()
 {
 	process_options
+	io_global_testbed_lock
 	if [[ -z $PLOTS ]]; then
 		run_test
 	fi
+	io_global_testbed_release_lock
 }
 main

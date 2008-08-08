@@ -8,7 +8,7 @@ remote_run_command_on_client()
 	local user=$1
 	local host=$2
 	local command=$3
-	verbose "executing '$command' on $host"
+	debug "Executing '$command' on $host"
 	ssh $user@$host "$command"
 }
 

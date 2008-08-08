@@ -167,9 +167,11 @@ main()
 {
 	DEAD_HOSTS_TMP_FILE=$(create_temp_file)
 	process_options
+	io_global_testbed_lock
 	ping_hosts
 	check_connection_from_testbed_to_hosts
 	check_connection_of_wireless_hosts
 	release_temp_file $DEAD_HOSTS_TMP_FILE
+	io_global_testbed_release_lock
 }
 main
