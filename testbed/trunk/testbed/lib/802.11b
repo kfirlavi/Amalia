@@ -16,20 +16,21 @@ WIRELESS_802_11b_AIFS=2
 WIRELESS_802_11b_TXOP=0
 WIRELESS_802_11b_QUEUES=$(seq 0 3)
 WIRELESS_802_11b_MODE=11b
+WIRELESS_802_11b_SLOT_TIME=20 #refers to the gap in time between 32 slots 
 
 wireless_802_11b_generate_get_commands()
 {
 	local interface=$1 #(ath0,eth0...)
 
-	echo -n "iwpriv $interface get_mode && "
+	echo -n "iwpriv $interface get_mode ; "
 	for queue in $WIRELESS_802_11b_QUEUES
 	do
 		for flag in 0 1
 		do
-			echo -n "iwpriv $interface get_cwmin $queue $flag && "
-			echo -n "iwpriv $interface get_cwmax $queue $flag && "
-			echo -n "iwpriv $interface get_aifs $queue $flag && "
-			echo -n "iwpriv $interface get_txoplimit $queue $flag && "
+			echo -n "iwpriv $interface get_cwmin $queue $flag ; "
+			echo -n "iwpriv $interface get_cwmax $queue $flag ; "
+			echo -n "iwpriv $interface get_aifs $queue $flag ; "
+			echo -n "iwpriv $interface get_txoplimit $queue $flag ; "
 		done
 	done
 	echo -n "true"
@@ -39,15 +40,16 @@ wireless_802_11b_generate_set_commands()
 {
 	local interface=$1 #(ath0,eth0...)
 
-	echo -n "iwpriv $interface mode $WIRELESS_802_11b_MODE && "
+	echo -n "iwpriv $interface mode $WIRELESS_802_11b_MODE ; "
+	echo -n "sysctl dev.wifi0.slottime=$WIRELESS_802_11b_SLOT_TIME ; "
 	for queue in $WIRELESS_802_11b_QUEUES
 	do
 		for flag in 0 1
 		do
-			echo -n "iwpriv $interface cwmin $queue $flag $WIRELESS_802_11b_CWMIN && "
-			echo -n "iwpriv $interface cwmax $queue $flag $WIRELESS_802_11b_CWMAX && "
-			echo -n "iwpriv $interface aifs $queue $flag $WIRELESS_802_11b_AIFS && "
-			echo -n "iwpriv $interface txoplimit $queue $flag $WIRELESS_802_11b_TXOP && "
+			echo -n "iwpriv $interface cwmin $queue $flag $WIRELESS_802_11b_CWMIN ; "
+			echo -n "iwpriv $interface cwmax $queue $flag $WIRELESS_802_11b_CWMAX ; "
+			echo -n "iwpriv $interface aifs $queue $flag $WIRELESS_802_11b_AIFS ; "
+			echo -n "iwpriv $interface txoplimit $queue $flag $WIRELESS_802_11b_TXOP ; "
 		done
 	done
 	echo -n "echo 802.11b flags are set"
