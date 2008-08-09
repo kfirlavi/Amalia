@@ -100,7 +100,7 @@ get_client_state()
 	local dir=$1
 	local pids=
 	local state_dir="$dir/$STATES_RELATIVE_DIR"
-	mkdir -p $state_dir
+	create_directory $state_dir
 	
 	for c in $CLIENTS
 	do 
