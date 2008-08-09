@@ -104,6 +104,13 @@ make_results_dir()
 	echo $dir
 }
 
+get_results_dir()
+{
+	local duration=$1
+	local dir="$TEST_OUTPUT_DIR/time.${duration}"
+	echo $dir
+}
+
 start_logging()
 {
 	local tcpprobe_host=$1
@@ -221,6 +228,40 @@ set_wireless()
 	wireless_802_11b_set_network
 }
 
+generate_plots()
+{
+	local t=
+	local plots_dir=$TEST_OUTPUT_DIR/$DIR_FOR_PLOTS
+	create_directory $plots_dir
+
+	for t in $TIMES
+	do
+		verbose_bold "Working on plots with time $t"
+		tcp_plot_srtt_vs_raw_rtt src $(get_results_dir $t) $plots_dir 
+	done
+	generate_index_file $plots_dir
+}
+
+generate_index_file()
+{
+	local dir=$1
+	local html=$dir/index.html
+	verbose "Generating $html"
+	echo "<html><body>" > $html
+	for i in $(cd $dir && find -name '*png' | sort -n -t t -k 9,9n)
+	do
+		local datafile_name=$(echo $i| sed 's/\.png//g').data
+		if [[ -f $dir/$datafile_name ]]; then
+			debug "data file exist for plot $i, so we link to it"
+			echo "<a href='$datafile_name'><img align='center' src='$i' alt='' /></a>" >> $html
+		else
+			debug "$i don't have data file. Not creating link."
+			echo "<img align='center' src='$i' alt='' />" >> $html
+		fi
+	done
+	echo "</html></body>" >> $html
+}
+
 run_test()
 {
 	set_wireless
@@ -237,6 +278,9 @@ main()
 	io_global_testbed_lock
 	if [[ -z $PLOTS ]]; then
 		run_test
+	fi
+	if [[ -z $NO_PLOTS ]]; then
+		generate_plots
 	fi
 	io_global_testbed_release_lock
 }

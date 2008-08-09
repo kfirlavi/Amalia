@@ -11,6 +11,13 @@ TCP_CLIENT_PROBE_LOG_FILE=/tmp/tcpporbe
 TCP_TCPPROBE_PROC_FILE=/proc/net/tcpprobe
 TCP_TCPPROBE_LOG_SUFFIX=tcpprobe
 TCP_WINDOW="10m" # default 10 MB window
+TCP_PNG_SIZE="400,300"
+
+# Columns position in tcpprobe file
+TCP_TCPPROBE_COL_SEQ=11
+TCP_TCPPROBE_COL_ACK_SEQ=12
+TCP_TCPPROBE_COL_RAW_RTT=13
+TCP_TCPPROBE_COL_SRTT=10
 
 tcp_change_ca_algorithm_on_client()
 {
@@ -48,3 +55,18 @@ tcp_save_tcpprobe_log_file()
 	remote_copy_file_from_host root $host $src $dst
 	remote_delete_file_on_host $host $src
 }
+
+tcp_plot_srtt_vs_raw_rtt()
+{
+	local host=$1
+	local workdir=$2
+	local plots_dir=$3
+	local probe_file=$workdir/$host.$TCP_TCPPROBE_LOG_SUFFIX
+	local plot_file=$plots_dir/$host.srtt.vs.rawrtt.png
+	gnuplot <<- EOF > $plot_file
+		set term png size $TCP_PNG_SIZE
+		plot "$probe_file" using 1:$TCP_TCPPROBE_COL_SRTT with lines, \
+		     "$probe_file" using 1:$TCP_TCPPROBE_COL_RAW_RTT with lines
+		EOF
+}
+

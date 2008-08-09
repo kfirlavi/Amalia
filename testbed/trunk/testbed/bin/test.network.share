@@ -248,7 +248,7 @@ generate_plots()
 	local t=
 	local b=
 	local plots_dir=$TEST_OUTPUT_DIR/$DIR_FOR_PLOTS
-	mkdir -p $plots_dir
+	create_directory $plots_dir
 
 	for t in $TIMES
 	do
@@ -278,6 +278,7 @@ generate_plots()
 main()
 {
 	process_options
+	io_global_testbed_lock
 	if [[ -z $PLOTS ]]; then
 		wireless_atheros_set_no_accel_to_network
 		wireless_set_all_clients_minimum_txpower
@@ -287,5 +288,6 @@ main()
 	if [[ -z $NO_PLOTS ]]; then
 		generate_plots
 	fi
+	io_global_testbed_release_lock
 }
 main
