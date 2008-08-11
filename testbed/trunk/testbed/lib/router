@@ -8,25 +8,130 @@ source $LIB_PATH/remote
 
 # Globals
 ROUTER_DELAYS=0
-ROUTER_DEFAULT_SRC_NETWORK="193.168.1.3"
-ROUTER_DEFAULT_DST_NETWORK="193.168.1.4"
+ROUTER_DEFAULT_SRC_NETWORK="193.168.3.0/24"
+ROUTER_DEFAULT_DST_NETWORK="193.168.4.0/24"
+ROUTER_DUMMYNET_IN_PIPE=1
+ROUTER_DUMMYNET_OUT_PIPE=2
 
-# Usage: dummynet rtt-ms rate-mb queue-ratio [lossrate]
-function router_set_dummynet()
+router_set_dummynet()
 {
-	local latency=$(($1 / 2))ms # rtt in ms
-	local bandwidth=$2Mbit/s # rate in mb
-	local queue=$(echo "$1*$2*$3*1000/8" | bc)
-	local lossrate=${4}
+	local router=$1
+	local latency=$2
+	local bandwidth=$3
+	local queue=$4
+	local lossrate=$5
 	local src_network=$ROUTER_DEFAULT_SRC_NETWORK
 	local dst_network=$ROUTER_DEFAULT_DST_NETWORK
 
-	local command="\
-		kldstat |grep dummynet &>/dev/null || kldload dummynet; \
-		ipfw -f -q flush; ipfw -f -q pipe flush;  sleep 1;    \
-		ipfw -q add pipe 1 ip from $src_network to $dst_network in       && \
-		ipfw -q add pipe 2 ip from $dst_network to $src_network out      && \
-		ipfw pipe 1 config bandwidth $bandwidth queue ${queue}B delay $latency plr $lossrate  && \
-		ipfw pipe 2 config bandwidth $bandwidth queue ${queue}B delay $latency"
-	remote_run_command_on_client root router $command
+	router_load_dummynet $router
+	router_flush_dummynet $router
+	router_set_dummynet_pipes $router $src_network $dst_network
+	router_configure_dummynet_pipes $router $bandwidth $queue $latency $lossrate
 }
+
+router_show_dummynet_settings()
+{
+	local router=$1
+	remote_run_command_on_client root $router "ipfw show"
+}
+
+router_load_dummynet()
+{
+	local router=$1
+	verbose "loading dummynet module on router"
+	remote_run_command_on_client root $router "kldstat | grep dummynet &>/dev/null || kldload dummynet"
+}
+
+router_flush_dummynet()
+{
+	local router=$1
+	verbose "flushing dummynet pipes on router"
+	remote_run_command_on_client root $router "ipfw -f -q flush; ipfw -f -q pipe flush"
+	sleep 1
+}
+
+router_set_dummynet_pipes()
+{
+	local router=$1
+	local src_network=$2
+	local dst_network=$3
+	router_set_dummynet_in_pipe $router $src_network $dst_network
+	router_set_dummynet_out_pipe $router $src_network $dst_network
+}
+
+router_set_dummynet_in_pipe()
+{
+	local router=$1
+	local src_network=$2
+	local dst_network=$3
+	local pipe=$ROUTER_DUMMYNET_IN_PIPE
+	verbose "setting up in pipe on $router dummynet"
+	remote_run_command_on_client root $router "ipfw -q add pipe $pipe ip from $src_network to $dst_network in"
+}
+
+router_set_dummynet_out_pipe()
+{
+	local router=$1
+	local src_network=$2
+	local dst_network=$3
+	local pipe=$ROUTER_DUMMYNET_OUT_PIPE
+	verbose "setting up out pipe on $router dummynet"
+	remote_run_command_on_client root $router "ipfw -q add pipe $pipe ip from $dst_network to $src_network out"
+}
+
+router_configure_dummynet_pipes()
+{
+	local router=$1
+	local latency=$2
+	local bandwidth=$3
+	local queue=$4
+	local lossrate=$5
+	router_configure_dummynet_in_pipe $router $latency $bandwidth $queue $lossrate
+	router_configure_dummynet_out_pipe $router $latency $bandwidth $queue
+}
+
+router_configure_dummynet_in_pipe()
+{
+	local router=$1
+	local latency=$2
+	local bandwidth=$3
+	local queue=$4
+	local lossrate=$5
+	local pipe=$ROUTER_DUMMYNET_IN_PIPE
+	verbose "configure in pipe on $router dummynet with bandwidth ${bandwidth}Mbit/s queue ${queue}B delay $latency loss $lossrate"
+	local command="ipfw pipe $pipe config bandwidth ${bandwidth}Mbit/s queue ${queue}B delay $latency plr $lossrate"
+	remote_run_command_on_client root $router "$command"
+}
+
+router_configure_dummynet_out_pipe()
+{
+	local router=$1
+	local latency=$2
+	local bandwidth=$3
+	local queue=$4
+	local pipe=$ROUTER_DUMMYNET_OUT_PIPE
+	verbose "configure out pipe on $router dummynet with bandwidth ${bandwidth}Mbit/s queue ${queue}B delay $latency"
+	local command="ipfw pipe $pipe config bandwidth ${bandwidth}Mbit/s queue ${queue}B delay $latency"
+	remote_run_command_on_client root $router "$command"
+}
+
+# Usage: dummynet rtt-ms rate-mb queue-ratio [lossrate]
+#router_set_dummynet()
+#{
+#	local latency=$(($1 / 2))ms # rtt in ms
+#	local bandwidth=$2Mbit/s # rate in mb
+#	local queue=$(echo "$1*$2*$3*1000/8" | bc)
+#	local lossrate=${4}
+#	local src_network=$ROUTER_DEFAULT_SRC_NETWORK
+#	local dst_network=$ROUTER_DEFAULT_DST_NETWORK
+#
+#	local command=" \
+#		kldstat |grep dummynet &>/dev/null || kldload dummynet; \
+#		ipfw -f -q flush; ipfw -f -q pipe flush;  sleep 1;    \
+#		ipfw -q add pipe 1 ip from $src_network to $dst_network in       && \
+#		ipfw -q add pipe 2 ip from $dst_network to $src_network out      && \
+#		ipfw pipe 1 config bandwidth $bandwidth queue ${queue}B delay $latency plr $lossrate  && \
+#		ipfw pipe 2 config bandwidth $bandwidth queue ${queue}B delay $latency"
+#	verbose "$command"
+#	remote_run_command_on_client root router "$command"
+#}
