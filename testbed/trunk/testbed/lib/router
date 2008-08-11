@@ -39,7 +39,10 @@ router_set_dummynet()
 router_show_dummynet_settings()
 {
 	local router=$1
+	verbose "Show dummynet settings"
 	remote_run_command_on_client root $router "ipfw show"
+	remote_run_command_on_client root $router "ipfw pipe $ROUTER_DUMMYNET_IN_PIPE show"
+	remote_run_command_on_client root $router "ipfw pipe $ROUTER_DUMMYNET_OUT_PIPE show"
 }
 
 router_load_dummynet()
@@ -93,6 +96,8 @@ router_configure_dummynet_pipes()
 	local bandwidth=$3
 	local queue=$4
 	local lossrate=$5
+	# delay should split between in and out pipes. 
+	latency=$(echo $latency/2 | bc)
 	router_configure_dummynet_in_pipe $router $latency $bandwidth $queue $lossrate
 	router_configure_dummynet_out_pipe $router $latency $bandwidth $queue
 }
