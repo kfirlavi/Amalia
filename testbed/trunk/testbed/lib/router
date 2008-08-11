@@ -16,6 +16,7 @@ ROUTER_DUMMYNET_OUT_PIPE=2
 router_disable_dummynet()
 {
 	local router=$1
+	router_load_dummynet $router
 	router_flush_dummynet $router
 }
 
