@@ -60,6 +60,13 @@ struct tcp_log {
 	u32	snd_cwnd;
 	u32	ssthresh;
 	u32	srtt;
+#ifdef CONFIG_NET_TCPPROBE_PACKET_SEQ
+	__be32	seq;
+	__be32	ack_seq;
+#endif
+#ifdef CONFIG_NET_TCPPROBE_RAWRTT
+	u32	raw_rtt;
+#endif
 };
 
 static struct {
@@ -114,6 +121,13 @@ static int jtcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			p->snd_wnd = tp->snd_wnd;
 			p->ssthresh = tcp_current_ssthresh(sk);
 			p->srtt = tp->srtt >> 3;
+#ifdef CONFIG_NET_TCPPROBE_PACKET_SEQ
+			p->seq = tcp_hdr(skb)->seq;
+			p->ack_seq = tcp_hdr(skb)->ack_seq;
+#endif
+#ifdef CONFIG_NET_TCPPROBE_RAWRTT
+			p->raw_rtt = tp->raw_rtt;
+#endif
 
 			tcp_probe.head = (tcp_probe.head + 1) % bufsize;
 		}
@@ -154,13 +168,29 @@ static int tcpprobe_sprint(char *tbuf, int n)
 
 	return snprintf(tbuf, n,
 			"%lu.%09lu %d.%d.%d.%d:%u %d.%d.%d.%d:%u"
-			" %d %#x %#x %u %u %u %u\n",
+			" %d %#x %#x %u %u %u %u"
+#ifdef CONFIG_NET_TCPPROBE_PACKET_SEQ
+			" %u %u"
+#endif
+#ifdef CONFIG_NET_TCPPROBE_RAWRTT
+			" %u"
+#endif
+			"\n",
 			(unsigned long) tv.tv_sec,
 			(unsigned long) tv.tv_nsec,
 			NIPQUAD(p->saddr), ntohs(p->sport),
 			NIPQUAD(p->daddr), ntohs(p->dport),
 			p->length, p->snd_nxt, p->snd_una,
-			p->snd_cwnd, p->ssthresh, p->snd_wnd, p->srtt);
+			p->snd_cwnd, p->ssthresh, p->snd_wnd, p->srtt
+#ifdef CONFIG_NET_TCPPROBE_PACKET_SEQ
+			,
+			p->seq, 
+			p->ack_seq, 
+#endif
+#ifdef CONFIG_NET_TCPPROBE_RAWRTT
+			p->raw_rtt
+#endif
+			);
 }
 
 static ssize_t tcpprobe_read(struct file *file, char __user *buf,

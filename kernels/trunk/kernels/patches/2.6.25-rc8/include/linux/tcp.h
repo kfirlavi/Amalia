@@ -302,6 +302,9 @@ struct tcp_sock {
 	u32	mdev_max;	/* maximal mdev for the last rtt period	*/
 	u32	rttvar;		/* smoothed mdev_max			*/
 	u32	rtt_seq;	/* sequence number to update rttvar	*/
+#ifdef CONFIG_NET_TCPPROBE_RAWRTT
+	u32	raw_rtt;	/* the raw rtt before finding the srtt  */
+#endif
 
 	u32	packets_out;	/* Packets which are "in flight"	*/
 	u32	retrans_out;	/* Retransmitted packets out		*/

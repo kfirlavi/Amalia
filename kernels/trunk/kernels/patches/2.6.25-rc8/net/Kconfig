@@ -225,6 +225,20 @@ config NET_TCPPROBE
 	To compile this code as a module, choose M here: the
 	module will be called tcp_probe.
 
+config NET_TCPPROBE_RAWRTT
+	bool "TCP probe raw rtt printing"
+	depends on NET_TCPPROBE
+	default y
+	---help---
+	Adds printing of raw rtt before turning it to smooth rtt.
+
+config NET_TCPPROBE_PACKET_SEQ
+	bool "TCP probe packet sequence printing"
+	depends on NET_TCPPROBE
+	default y
+	---help---
+	Adds printing of TCP sequence and ACK numbers.
+
 endmenu
 
 endmenu

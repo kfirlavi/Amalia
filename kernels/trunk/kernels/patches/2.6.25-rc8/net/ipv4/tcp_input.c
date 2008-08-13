@@ -622,6 +622,9 @@ static void tcp_rtt_estimator(struct sock *sk, const __u32 mrtt)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	long m = mrtt; /* RTT */
+#ifdef CONFIG_NET_TCPPROBE_RAWRTT
+	tp->raw_rtt = mrtt;
+#endif
 
 	/*	The following amusing code comes from Jacobson's
 	 *	article in SIGCOMM '88.  Note that rtt and mdev
