@@ -33,7 +33,7 @@ router_set_dummynet()
 	router_load_dummynet $router
 	router_flush_dummynet $router
 	router_set_dummynet_pipes $router $src_network $dst_network
-	router_configure_dummynet_pipes $router $bandwidth $queue $latency $lossrate
+	router_configure_dummynet_pipes $router $latency $bandwidth $queue $lossrate
 }
 
 router_show_dummynet_settings()
