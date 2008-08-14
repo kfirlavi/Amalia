@@ -131,6 +131,7 @@ check_connection_from_host_to_wireless_hosts()
 	local ret=$(scan_host_ssh_port $host)
 	[[ -n $ret ]] \
 		&& error "SSH port on $host is closed. Can't check for wireless connection from $host to wireless hosts" \
+		&& io_global_testbed_release_lock \
 		&& exit
 	for h in $(generate_list_of_wireless_hosts)
 	do
