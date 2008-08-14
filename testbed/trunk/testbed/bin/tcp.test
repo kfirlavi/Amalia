@@ -12,6 +12,7 @@ source $LIB_PATH/madwifi
 source $LIB_PATH/tcp
 source $LIB_PATH/iperf
 source $LIB_PATH/router
+source $LIB_PATH/plots
 
 # Globals
 END=
@@ -239,27 +240,7 @@ generate_plots()
 		verbose_bold "Working on plots with time $t"
 		tcp_plot_srtt_vs_raw_rtt src $(get_results_dir $t) $plots_dir 
 	done
-	generate_index_file $plots_dir
-}
-
-generate_index_file()
-{
-	local dir=$1
-	local html=$dir/index.html
-	verbose "Generating $html"
-	echo "<html><body>" > $html
-	for i in $(cd $dir && find -name '*png' | sort -n -t t -k 9,9n)
-	do
-		local datafile_name=$(echo $i| sed 's/\.png//g').data
-		if [[ -f $dir/$datafile_name ]]; then
-			debug "data file exist for plot $i, so we link to it"
-			echo "<a href='$datafile_name'><img align='center' src='$i' alt='' /></a>" >> $html
-		else
-			debug "$i don't have data file. Not creating link."
-			echo "<img align='center' src='$i' alt='' />" >> $html
-		fi
-	done
-	echo "</html></body>" >> $html
+	plots_generate_index_file $plots_dir
 }
 
 run_test()
@@ -276,12 +257,14 @@ main()
 {
 	process_options
 	io_global_testbed_lock
+	router_flush_dummynet
 	if [[ -z $PLOTS ]]; then
 		run_test
 	fi
 	if [[ -z $NO_PLOTS ]]; then
 		generate_plots
 	fi
+	router_flush_dummynet
 	io_global_testbed_release_lock
 }
 main

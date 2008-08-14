@@ -9,6 +9,7 @@ source $LIB_PATH/tcpdump
 source $LIB_PATH/802.11b
 source $LIB_PATH/wireless
 source $LIB_PATH/madwifi
+source $LIB_PATH/plots
 
 # Globals
 END=
@@ -223,26 +224,6 @@ generate_data_file()
 	done
 }
 
-generate_index_file()
-{
-	local dir=$1
-	local html=$dir/index.html
-	verbose "Generating $html"
-	echo "<html><body>" > $html
-	for i in $(cd $dir && find -name '*png' | sort -n -t t -k 9,9n)
-	do
-		local datafile_name=$(echo $i| sed 's/\.png//g').data
-		if [[ -f $dir/$datafile_name ]]; then
-			debug "data file exist for plot $i, so we link to it"
-			echo "<a href='$datafile_name'><img align='center' src='$i' alt='' /></a>" >> $html
-		else
-			debug "$i don't have data file. Not creating link."
-			echo "<img align='center' src='$i' alt='' />" >> $html
-		fi
-	done
-	echo "</html></body>" >> $html
-}
-
 generate_plots()
 {
 	local t=
@@ -272,7 +253,7 @@ generate_plots()
 			madwifi_generate_delay_histogram_plot_for_all_clients "$workdir" "$plot_file_name" "$plot_title"
 		done
 	done
-	generate_index_file $plots_dir
+	plots_generate_index_file $plots_dir
 }
 
 main()
