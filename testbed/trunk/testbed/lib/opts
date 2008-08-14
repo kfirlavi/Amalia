@@ -34,3 +34,17 @@ combine_clients_opts()
 	fi
 }
 
+opts_get_clients_list()
+{
+	local clients=$1 # expects 1,2,3,4
+	echo $clients | tr ',' ' '
+}
+
+# check that we got just one command line variable.
+# example: -c 1 and not -c 1,2,3
+opts_check_for_one_input()
+{
+	local input="$@"
+	local num=$(echo $input | wc --words)
+	[[ $num -eq 1 ]] && echo $num
+}

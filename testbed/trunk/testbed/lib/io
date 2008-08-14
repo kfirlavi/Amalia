@@ -75,7 +75,7 @@ create_temp_file()
 	local user=$(whoami)
 	local file_name=$(mktemp -t $user.$prog_name.XXXXXX)
 	if [[ $? != 0 ]]; then
-		echo "can't create temp file"
+		error "can't create temp file"
 		exit 1
 	fi
 	echo $file_name
@@ -92,7 +92,7 @@ create_directory()
 	local dir=$1
 	mkdir -p $dir
 	if [[ -d $dir ]]; then
-		verbose "Directory '$dir' created"
+		verbose "Directory $dir created"
 	else
 		error "Error: cann't create directory \"$dir\""
 		exit 1

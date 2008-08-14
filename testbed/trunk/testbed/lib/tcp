@@ -5,13 +5,15 @@ LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
 source $LIB_PATH/remote
+source $LIB_PATH/madwifi
 
 # Globals
 TCP_CLIENT_PROBE_LOG_FILE=/tmp/tcpporbe
 TCP_TCPPROBE_PROC_FILE=/proc/net/tcpprobe
-TCP_TCPPROBE_LOG_SUFFIX=tcpprobe
+TCP_TCPPROBE_LOG_SUFFIX=.tcpprobe
 TCP_WINDOW="10m" # default 10 MB window
-TCP_PNG_SIZE="400,300"
+#TCP_PNG_SIZE="400,300"
+TCP_PNG_SIZE="800,600"
 
 # Columns position in tcpprobe file
 TCP_TCPPROBE_COL_SEQ=11
@@ -51,7 +53,7 @@ tcp_save_tcpprobe_log_file()
 	local host=$1
 	local dst_dir=$2
 	local src=$TCP_CLIENT_PROBE_LOG_FILE
-	local dst=$dst_dir/$host.$TCP_TCPPROBE_LOG_SUFFIX
+	local dst=$dst_dir/$host$TCP_TCPPROBE_LOG_SUFFIX
 	remote_copy_file_from_host root $host $src $dst
 	remote_delete_file_on_host $host $src
 }
@@ -61,12 +63,55 @@ tcp_plot_srtt_vs_raw_rtt()
 	local host=$1
 	local workdir=$2
 	local plots_dir=$3
-	local probe_file=$workdir/$host.$TCP_TCPPROBE_LOG_SUFFIX
+	local probe_file=$workdir/$host$TCP_TCPPROBE_LOG_SUFFIX
 	local plot_file=$plots_dir/$host.srtt.vs.rawrtt.png
 	gnuplot <<- EOF > $plot_file
 		set term png size $TCP_PNG_SIZE
-		plot "$probe_file" using 1:$TCP_TCPPROBE_COL_SRTT with lines, \
-		     "$probe_file" using 1:$TCP_TCPPROBE_COL_RAW_RTT with lines
+		plot "$probe_file" using 1:$TCP_TCPPROBE_COL_SRTT with lines title 'srtt', \
+		     "$probe_file" using 1:$TCP_TCPPROBE_COL_RAW_RTT with line title 'raw rtt'
 		EOF
 }
 
+tcp_generate_madwifi_queue_delays_vs_rawrtt()
+{
+	local tcpprobe_dumpfile=$1
+	local madwifi_dumpfile=$2
+	local queue_delay=
+	local tcp_seq=
+	local queue_delays_file=$(create_temp_file)
+	local rtt_file=$(create_temp_file)
+	madwifi_generate_queue_delays_vs_tcp_sequence $madwifi_file > $queue_delays_file
+	cat $tcpprobe_dumpfile | cut -d ' ' -f "$TCP_TCPPROBE_COL_ACK_SEQ $TCP_TCPPROBE_COL_RAW_RTT" > $rtt_file
+	cat $queue_delays_file \
+	| while read queue_delay tcp_seq
+	do
+		local rawrtt=$(grep --max-count=1 $tcp_seq $rtt_file | cut -d ' ' -f 2)
+		if [[ -n $rawrtt ]]; then
+			echo $queue_delay $rawrtt
+		else
+			error "$tcp_seq don't have match in $tcpprobe_dumpfile"
+		fi
+	done
+	release_temp_file $queue_delays_file
+	release_temp_file $rtt_file
+}
+
+tcp_plot_madwifi_queue_vs_rawrtt()
+{
+	local host=$1
+	local workdir=$2
+	local plots_dir=$3
+	local probe_file=$workdir/$host$TCP_TCPPROBE_LOG_SUFFIX
+	local madwifi_file=$workdir/$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
+	local plot_file=$plots_dir/$host.madwifi.queue.vs.rawrtt.png
+	local tmp_file=$(create_temp_file)
+	tcp_generate_madwifi_queue_delays_vs_rawrtt $probe_file $madwifi_file > $tmp_file
+	gnuplot <<- EOF > $plot_file
+		set term png size $TCP_PNG_SIZE
+		set title 'Madwifi queue delays vs raw RTT'
+		set xlabel 'queue delay'
+		set ylabel 'raw rtt'
+		plot "$tmp_file" using 1:2 with points
+		EOF
+	release_temp_file $tmp_file
+}

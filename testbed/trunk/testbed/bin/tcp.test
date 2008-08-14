@@ -24,10 +24,11 @@ PLOTS= # default no plots
 NO_PLOTS= # Initial value will generate plots
 DIR_FOR_PLOTS="plots"
 STATES_RELATIVE_DIR="states"
-NUMBER_OF_UDP_CLIENTS=
+UDP_CLIENTS=
 LINK_CAPASITY=40 # total mb the network can handle
 IPERF_UDP_PORT=5001
 IPERF_TCP_PORT=5002
+TCP_CLIENT=
 
 usage()
 {
@@ -64,8 +65,8 @@ get_opts()
 			t) TIMES=`echo $OPTARG | tr ',' ' '`;;
 			s) TCP_SOURCE="wsrc";;
 			n) END=$OPTARG;;
-			c) CLIENTS=`echo $OPTARG | tr ',' ' '`;;
-			u) NUMBER_OF_UDP_CLIENTS=$OPTARG;;
+			c) CLIENTS=$(opts_get_clients_list $OPTARG);;
+			u) UDP_CLIENTS=$(opts_get_clients_list $OPTARG);;
 			p) PLOTS=1;;
 			g) NO_PLOTS=1;;
 			v) VERBOSE=1;;
@@ -85,7 +86,19 @@ check_for_required_opts()
 		usage
 		exit 1
 	fi
-	check_clients_opts
+	if [[ -z $UDP_CLIENTS ]]
+	then
+		check_clients_opts
+	else
+		if [[ -z $(opts_check_for_one_input $CLIENTS) ]]
+		then
+			error "you should provide just one client with -c to be the TCP client"
+			usage
+			exit 1
+		else
+			TCP_CLIENT="client$CLIENTS"
+		fi
+	fi
 }
 
 process_options()
@@ -119,7 +132,7 @@ start_logging()
 	local tcpdump_host=$3
 	tcp_start_tcpprobe_logging $tcpprobe_host $IPERF_TCP_PORT
 	madwifi_start_timing_logging $madwifi_host
-	tcpdump_start_logging $madwifi_host ath0 $IPERF_TCP_PORT
+	tcpdump_start_logging $tcpdump_host ath0 $IPERF_TCP_PORT
 }
 
 stop_logging()
@@ -144,9 +157,8 @@ run_iperf_servers()
 
 generate_udp_background_flows()
 {
-	local n=$NUMBER_OF_UDP_CLIENTS
-	local tcp_client="client$((n+1))"
-	local bandwidth=$(echo $LINK_CAPASITY/$n | bc)
+	local tcp_client=$TCP_CLIENT
+	local bandwidth=$(echo $LINK_CAPASITY/$(echo $UDP_CLIENTS | tr ',' ' ' | wc --words) | bc)
 	local t=$TIMES
 	local first_run=
 	local pids=
@@ -156,14 +168,15 @@ generate_udp_background_flows()
 	tcp_change_ca_algorithm_on_client reno src
 	tcp_change_ca_algorithm_on_client reno $tcp_client
 	wireless_set_wifi0_txqueue_length_to_minimum $tcp_client
-	start_logging $tcp_client
+	start_logging $tcp_client $tcp_client ap
 
-	for c in $(seq 1 $n)
+	for c in $(echo $UDP_CLIENTS | tr ',' ' ')
 	do 
-		verbose "Running iperf UDP on client$c for $t sec with $bandwidth mb"
-		local tput_options="-o -s client$c -u src -d wsrc -t $t -b $bandwidth -v"
+		local udp_time=$(echo $t+5 | bc)
+		verbose "Running iperf UDP on client$c for $udp_time sec with $bandwidth mb"
+		local tput_options="-o -s client$c -u src -d wsrc -t $udp_time -b $bandwidth -v"
 		[[ -n $first_run ]] && tput_options="$tput_options -k"
-		tput  $tput_options 2>&1 >> "$dir/UDP.client${c}.time.$t.bandwidth.$bandwidth" &
+		tput  $tput_options 2>&1 >> "$dir/UDP.client${c}.time.$udp_time.bandwidth.$bandwidth" &
 		pids="$pids $!"
 		first_run=1
 	done
@@ -172,7 +185,7 @@ generate_udp_background_flows()
 	iperf_run_tcp_client_once $tcp_client wsrc $t 2>&1 >> "$dir/TCP.$tcp_client.time.$t" &
 	pids="$pids $!"
 	wait_for_pids $pids
-	stop_logging $tcp_client $dir
+	stop_logging $tcp_client $tcp_client ap $dir
 }
 
 run_iperf_server_on_all_clients()
@@ -231,6 +244,7 @@ set_wireless()
 
 generate_plots()
 {
+	local tcpprobe_host=$1
 	local t=
 	local plots_dir=$TEST_OUTPUT_DIR/$DIR_FOR_PLOTS
 	create_directory $plots_dir
@@ -238,7 +252,9 @@ generate_plots()
 	for t in $TIMES
 	do
 		verbose_bold "Working on plots with time $t"
-		tcp_plot_srtt_vs_raw_rtt src $(get_results_dir $t) $plots_dir 
+		debug "$plots_dir "
+		tcp_plot_srtt_vs_raw_rtt $tcpprobe_host $(get_results_dir $t) $plots_dir 
+		tcp_plot_madwifi_queue_vs_rawrtt $tcpprobe_host $(get_results_dir $t) $plots_dir  
 	done
 	plots_generate_index_file $plots_dir
 }
@@ -256,15 +272,19 @@ run_test()
 main()
 {
 	process_options
-	io_global_testbed_lock
-	router_flush_dummynet
 	if [[ -z $PLOTS ]]; then
+		io_global_testbed_lock
+		router_flush_dummynet router
 		run_test
+		router_flush_dummynet router
+		io_global_testbed_release_lock
 	fi
 	if [[ -z $NO_PLOTS ]]; then
-		generate_plots
+		if [[ -n $TCP_SOURCE ]]; then
+			generate_plots src
+		else
+			generate_plots $TCP_CLIENT
+		fi
 	fi
-	router_flush_dummynet
-	io_global_testbed_release_lock
 }
 main
