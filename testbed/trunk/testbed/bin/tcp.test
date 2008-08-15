@@ -1,4 +1,5 @@
 #!/bin/bash
+IO_COMMAND="$0 $@"
 
 # load libraries
 LIB_PATH="$(dirname $0)/../lib"
@@ -25,7 +26,7 @@ NO_PLOTS= # Initial value will generate plots
 DIR_FOR_PLOTS="plots"
 STATES_RELATIVE_DIR="states"
 UDP_CLIENTS=
-LINK_CAPASITY=40 # total mb the network can handle
+LINK_CAPASITY=10 # total mb the network can handle
 IPERF_UDP_PORT=5001
 IPERF_TCP_PORT=5002
 TCP_CLIENT=
@@ -157,9 +158,9 @@ run_iperf_servers()
 
 generate_udp_background_flows()
 {
+	local t=$1
 	local tcp_client=$TCP_CLIENT
 	local bandwidth=$(echo $LINK_CAPASITY/$(echo $UDP_CLIENTS | tr ',' ' ' | wc --words) | bc)
-	local t=$TIMES
 	local first_run=
 	local pids=
 	local dir=$(make_results_dir $t)
@@ -224,7 +225,7 @@ run_tcp_flow_from_src_to_clients()
 
 generate_tcp_flows()
 {
-	local t=$TIMES
+	local t=$1
 	local dir=$(make_results_dir $t)
 
 	tcp_change_ca_algorithm_on_client reno src
@@ -252,9 +253,10 @@ generate_plots()
 	for t in $TIMES
 	do
 		verbose_bold "Working on plots with time $t"
-		debug "$plots_dir "
-		tcp_plot_srtt_vs_raw_rtt $tcpprobe_host $(get_results_dir $t) $plots_dir 
-		tcp_plot_madwifi_queue_vs_rawrtt $tcpprobe_host $(get_results_dir $t) $plots_dir  
+		local udp_flows=$(echo $UDP_CLIENTS | wc --words)
+		local description="time: $t sec\nTCP flow: $TCP_CLIENT -> src\n$udp_flows UDP flows: clients $(echo $UDP_CLIENTS | tr ' ' ',') -> src"
+		tcp_plot_srtt_vs_raw_rtt $t $tcpprobe_host $(get_results_dir $t) $plots_dir "$description"
+		tcp_plot_madwifi_queue_vs_rawrtt $t $tcpprobe_host $(get_results_dir $t) $plots_dir "$description"
 	done
 	plots_generate_index_file $plots_dir
 }
@@ -262,16 +264,22 @@ generate_plots()
 run_test()
 {
 	set_wireless
-	if [[ -z $TCP_SOURCE ]]; then
-		generate_udp_background_flows
-	else
-		generate_tcp_flows
-	fi
+	local t=
+	for t in $TIMES
+	do
+		verbose_bold "Runnint test for time $t"
+		if [[ -z $TCP_SOURCE ]]; then
+			generate_udp_background_flows $t
+		else
+			generate_tcp_flows $t
+		fi
+	done
 }
 
 main()
 {
 	process_options
+	io_backup_commad $TEST_OUTPUT_DIR
 	if [[ -z $PLOTS ]]; then
 		io_global_testbed_lock
 		router_flush_dummynet router

@@ -60,13 +60,16 @@ tcp_save_tcpprobe_log_file()
 
 tcp_plot_srtt_vs_raw_rtt()
 {
-	local host=$1
-	local workdir=$2
-	local plots_dir=$3
+	local duration=$1
+	local host=$2
+	local workdir=$3
+	local plots_dir=$4
+	local description=$5
 	local probe_file=$workdir/$host$TCP_TCPPROBE_LOG_SUFFIX
-	local plot_file=$plots_dir/$host.srtt.vs.rawrtt.png
+	local plot_file="$plots_dir/time.$duration.srtt.vs.rawrtt.png"
 	gnuplot <<- EOF > $plot_file
 		set term png size $TCP_PNG_SIZE
+		set title "SRTT vs RTT\n$description"
 		plot "$probe_file" using 1:$TCP_TCPPROBE_COL_SRTT with lines title 'srtt', \
 		     "$probe_file" using 1:$TCP_TCPPROBE_COL_RAW_RTT with line title 'raw rtt'
 		EOF
@@ -88,8 +91,8 @@ tcp_generate_madwifi_queue_delays_vs_rawrtt()
 		local rawrtt=$(grep --max-count=1 $tcp_seq $rtt_file | cut -d ' ' -f 2)
 		if [[ -n $rawrtt ]]; then
 			echo $queue_delay $rawrtt
-		else
-			error "$tcp_seq don't have match in $tcpprobe_dumpfile"
+		#else
+			#debug "$tcp_seq don't have match in $tcpprobe_dumpfile"
 		fi
 	done
 	release_temp_file $queue_delays_file
@@ -98,20 +101,21 @@ tcp_generate_madwifi_queue_delays_vs_rawrtt()
 
 tcp_plot_madwifi_queue_vs_rawrtt()
 {
-	local host=$1
-	local workdir=$2
-	local plots_dir=$3
+	local duration=$1
+	local host=$2
+	local workdir=$3
+	local plots_dir=$4
+	local plot_description=$5
 	local probe_file=$workdir/$host$TCP_TCPPROBE_LOG_SUFFIX
 	local madwifi_file=$workdir/$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
-	local plot_file=$plots_dir/$host.madwifi.queue.vs.rawrtt.png
-	local tmp_file=$(create_temp_file)
-	tcp_generate_madwifi_queue_delays_vs_rawrtt $probe_file $madwifi_file > $tmp_file
+	local plot_file="$plots_dir/time.$duration.madwifi.queue.vs.rawrtt.png"
+	local plot_data_file=$(echo $plot_file | sed 's/\.png//g').data
+	tcp_generate_madwifi_queue_delays_vs_rawrtt $probe_file $madwifi_file > $plot_data_file
 	gnuplot <<- EOF > $plot_file
 		set term png size $TCP_PNG_SIZE
-		set title 'Madwifi queue delays vs raw RTT'
+		set title "Madwifi queue delays vs raw RTT\n$plot_description"
 		set xlabel 'queue delay'
 		set ylabel 'raw rtt'
-		plot "$tmp_file" using 1:2 with points
+		plot "$plot_data_file" using 1:2 with points
 		EOF
-	release_temp_file $tmp_file
 }

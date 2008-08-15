@@ -3,6 +3,8 @@
 # Globals
 VERBOSE= # no verbos
 DEBUG= # no debug
+#IO_COMMAND= # needs to be defined at the start of the program like that IO_COMMAND="$0 $@"
+IO_COMMAND_HISTORY_FILE=command_history
 
 # Colors
 COLOR_LIGHT_BLUE="\033[1;34m"
@@ -152,3 +154,14 @@ io_global_testbed_release_lock()
 	fi
 }
 
+io_get_date_and_time()
+{
+	date +%Y.%m.%d_%H.%M
+}
+
+io_backup_commad()
+{
+	local workdir=$1
+	create_directory $workdir
+	echo "$(io_get_date_and_time) $IO_COMMAND" >> $workdir/$IO_COMMAND_HISTORY_FILE
+}
