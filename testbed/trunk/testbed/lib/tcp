@@ -81,18 +81,19 @@ tcp_generate_madwifi_queue_delays_vs_rawrtt()
 	local madwifi_dumpfile=$2
 	local queue_delay=
 	local tcp_seq=
+	local raw_rtt=
 	local queue_delays_file=$(create_temp_file)
 	local rtt_file=$(create_temp_file)
 	madwifi_generate_queue_delays_vs_tcp_sequence $madwifi_file > $queue_delays_file
 	cat $tcpprobe_dumpfile | cut -d ' ' -f "$TCP_TCPPROBE_COL_ACK_SEQ $TCP_TCPPROBE_COL_RAW_RTT" > $rtt_file
-	cat $queue_delays_file \
-	| while read queue_delay tcp_seq
+	cat $rtt_file \
+	| while read tcp_seq raw_rtt
 	do
-		local rawrtt=$(grep --max-count=1 $tcp_seq $rtt_file | cut -d ' ' -f 2)
-		if [[ -n $rawrtt ]]; then
-			echo $queue_delay $rawrtt
-		#else
-			#debug "$tcp_seq don't have match in $tcpprobe_dumpfile"
+		queue_delay=$(grep --max-count=1 $tcp_seq $queue_delays_file | cut -d ' ' -f 1)
+		if [[ -n $queue_delay ]]; then
+			echo $queue_delay $raw_rtt
+		else
+			debug "$tcp_seq don't have match in $tcpprobe_dumpfile"
 		fi
 	done
 	release_temp_file $queue_delays_file
