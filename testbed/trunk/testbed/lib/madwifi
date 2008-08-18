@@ -176,6 +176,8 @@ madwifi_generate_queue_delays_vs_tcp_sequence()
 	local t_enqueue=
 	local t_ack=
 	local queue_delay= 
+	local mac_delay= 
+	local total_delay=
 	local tcp_seq=
 	cat $file | cut -f "$MADWIFI_COL_ENQUEUE $MADWIFI_COL_ACK $MADWIFI_COL_TCP_SEQ" \
 	| while read t_enqueue t_ack tcp_seq
@@ -183,11 +185,13 @@ madwifi_generate_queue_delays_vs_tcp_sequence()
 		if [[ $prev_t_ack -gt $t_enqueue ]]; then 
 			# current packet was enqueued before 
 			# previouse packet finished sending
-			queue_delay=$((t_ack-prev_t_ack))
+			mac_delay=$((t_ack-prev_t_ack))
+			total_delay=$((t_ack-t_enqueue))
+			queue_delay=$((total_delay-mac_delay))
 		else
 			# previous packet got ack before this packet 
 			# entered the queue
-			queue_delay=$((t_ack-t_enqueue))
+			queue_delay=0
 		fi
 		prev_t_ack=$t_ack
 		echo $queue_delay $tcp_seq
