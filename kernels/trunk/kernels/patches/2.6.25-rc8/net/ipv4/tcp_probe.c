@@ -122,10 +122,8 @@ static int jtcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			p->ssthresh = tcp_current_ssthresh(sk);
 			p->srtt = tp->srtt >> 3;
 #ifdef CONFIG_NET_TCPPROBE_PACKET_SEQ
-			p->seq = ((struct tcphdr *) skb->transport_header)->seq;
-			p->ack_seq = ((struct tcphdr *) skb->transport_header)->ack_seq;
-			//p->seq = tcp_hdr(skb)->seq;
-			//p->ack_seq = tcp_hdr(skb)->ack_seq;
+			p->seq = tcp_hdr(skb)->seq;
+			p->ack_seq = tcp_hdr(skb)->ack_seq;
 #endif
 #ifdef CONFIG_NET_TCPPROBE_RAWRTT
 			p->raw_rtt = tp->raw_rtt;
