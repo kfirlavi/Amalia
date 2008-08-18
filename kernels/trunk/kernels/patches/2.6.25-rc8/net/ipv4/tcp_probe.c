@@ -122,8 +122,10 @@ static int jtcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			p->ssthresh = tcp_current_ssthresh(sk);
 			p->srtt = tp->srtt >> 3;
 #ifdef CONFIG_NET_TCPPROBE_PACKET_SEQ
-			p->seq = tcp_hdr(skb)->seq;
-			p->ack_seq = tcp_hdr(skb)->ack_seq;
+			p->seq = ((struct tcphdr *) skb->transport_header)->seq;
+			p->ack_seq = ((struct tcphdr *) skb->transport_header)->ack_seq;
+			//p->seq = tcp_hdr(skb)->seq;
+			//p->ack_seq = tcp_hdr(skb)->ack_seq;
 #endif
 #ifdef CONFIG_NET_TCPPROBE_RAWRTT
 			p->raw_rtt = tp->raw_rtt;
@@ -168,7 +170,7 @@ static int tcpprobe_sprint(char *tbuf, int n)
 
 	return snprintf(tbuf, n,
 			"%lu.%09lu %d.%d.%d.%d:%u %d.%d.%d.%d:%u"
-			" %d %#x %#x %u %u %u %u"
+			" %d %u %u %u %u %u %u"
 #ifdef CONFIG_NET_TCPPROBE_PACKET_SEQ
 			" %u %u"
 #endif
@@ -184,8 +186,8 @@ static int tcpprobe_sprint(char *tbuf, int n)
 			p->snd_cwnd, p->ssthresh, p->snd_wnd, p->srtt
 #ifdef CONFIG_NET_TCPPROBE_PACKET_SEQ
 			,
-			p->seq, 
-			p->ack_seq, 
+			ntohl(p->seq), 
+			ntohl(p->ack_seq), 
 #endif
 #ifdef CONFIG_NET_TCPPROBE_RAWRTT
 			p->raw_rtt

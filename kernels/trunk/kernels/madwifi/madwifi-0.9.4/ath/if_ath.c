@@ -7409,8 +7409,8 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			ds->ds_us.tx.ts_rssi			/* ack rssi */
 #ifdef MADWIFI_TCP_INFO
 			,
-			tcp_seq,				/* tcp sequence number */
-			tcp_ack_seq				/* tcp ack sequence number */
+			ntohl(tcp_seq),				/* tcp sequence number */
+			ntohl(tcp_ack_seq)			/* tcp ack sequence number */
 #endif /* MADWIFI_TCP_INFO */
 		);
 #endif /* TIMING_INFO */
