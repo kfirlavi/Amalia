@@ -67,7 +67,7 @@ madwifi_filter_udp_packet_size_from_timing_dumpfile_for_all_clients()
 	local pids=
 	for c in $CLIENTS
 	do 
-		madwifi_filter_udp_packet_size_from_timing_dumpfile "client$c" $destdir &
+		madwifi_filter_udp_packet_size_from_timing_dumpfile "$destdir/client$c$MADWIFI_TIMING_DUMPFILE_SUFFIX" &
 		pids="$pids $!"
 	done
 	wait_for_pids $pids
