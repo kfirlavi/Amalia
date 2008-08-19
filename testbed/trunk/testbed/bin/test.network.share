@@ -1,4 +1,5 @@
 #!/bin/bash
+IO_COMMAND="$0 $@"
 
 # load libraries
 LIB_PATH="$(dirname $0)/../lib"
@@ -259,6 +260,7 @@ generate_plots()
 main()
 {
 	process_options
+	io_backup_commad $TEST_OUTPUT_DIR
 	io_global_testbed_lock
 	if [[ -z $PLOTS ]]; then
 		wireless_atheros_set_no_accel_to_network
@@ -266,9 +268,9 @@ main()
 		wireless_802_11b_set_network
 		iterate_time_and_bandwidth
 	fi
+	io_global_testbed_release_lock
 	if [[ -z $NO_PLOTS ]]; then
 		generate_plots
 	fi
-	io_global_testbed_release_lock
 }
 main

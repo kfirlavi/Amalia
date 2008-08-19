@@ -159,12 +159,14 @@ write_pxe_default_file()
 
 main()
 {
+	io_global_testbed_lock
 	create_tftp_kernel_dir
 	kver=`get_kernel_version`
 	install_modules_to_client_root_nfs
 	create_initrd $kver
 	copy_kernel_to_tftp_dir $kver
 	write_pxe_default_file $kver
+	io_global_testbed_release_lock
 }
 
 main
