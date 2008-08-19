@@ -16,7 +16,7 @@ MAX_PACKETS_SEND=0
 #PNG_SIZE="1024,768"
 PNG_SIZE="400,300"
 TCPDUMP_CLIENTS_DUMPFILE_DIRECTORY="/tmp"
-TCPDUMP_CLIENTS_DUMPFILE_SUFFIX=".dump"
+TCPDUMP_CLIENTS_DUMPFILE_SUFFIX=".tcpdump"
 
 # will search the tcpdump file for the time that the last station started to send
 # then we can consider the experiment as started
@@ -118,7 +118,7 @@ generate_data_file_for_tcpdump_total_mb()
 	for srv in ap src
 	do
 		
-		local tcp_dump_file="$input_data_directory/$srv.dump"
+		local tcp_dump_file="$input_data_directory/$srv$TCPDUMP_CLIENTS_DUMPFILE_SUFFIX"
 		local tmp_file=
 		if [[ $srv == "ap" ]]; then 
 			tmp_file=$ap_dump_file
@@ -290,7 +290,7 @@ generate_tcpdump_plots()
 	local throuput_plots_dir=$plots_dir/throughput
 	create_directory $throuput_plots_dir
 
-	generate_tcpdump_start_to_end_of_experiment $workdir/ap.dump > $experiment_dump_file
+	generate_tcpdump_start_to_end_of_experiment $workdir/ap$TCPDUMP_CLIENTS_DUMPFILE_SUFFIX > $experiment_dump_file
 	generate_data_file_for_tcpdump_throughput_in_time $experiment_dump_file > $data_dump_file
 
 	verbose "Generating tcpdump plot of total MB sent by clients"
@@ -301,7 +301,7 @@ generate_tcpdump_plots()
 
 	verbose "Generating tcpdump throuput plots"
 	generate_data_file_for_throughput_plot \
-		$workdir/ap.dump \
+		$workdir/ap$TCPDUMP_CLIENTS_DUMPFILE_SUFFIX \
 		$THROUGHPUT_PLOTS_START_TIME \
 		$THROUGHPUT_PLOTS_DURATION > $throuput_plots_data
 
