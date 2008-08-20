@@ -8,6 +8,105 @@ WIRELESS_ATHEROS_ABOLT=0
 WIRELESS_TXPOWER_MIN=0
 WIRELESS_TXQUEUE_LENGTH_MIN=1
 
+#Default parameters are 
+#CWmin 5 (31)
+#CWmax 10 (1023)
+#AIFS 2 (==DIFS)
+#TXOP 0 (0 special == 1 packet, normally a time in usec)
+
+WIRELESS_802_11x_CWMIN=5
+WIRELESS_802_11x_CWMAX=10
+WIRELESS_802_11x_AIFS=2
+WIRELESS_802_11x_TXOP=0
+WIRELESS_802_11x_QUEUES=$(seq 0 3)
+
+WIRELESS_802_11x_MODE=11b # default mode
+
+# 802_11b
+WIRELESS_802_11b_MODE=11b
+WIRELESS_802_11b_SLOT_TIME=20 #refers to the gap in time between 32 slots 
+WIRELESS_802_11b_FIXEDRATE=11000
+
+# 802_11g
+WIRELESS_802_11g_MODE=11g
+WIRELESS_802_11g_SLOT_TIME=9 #refers to the gap in time between 32 slots 
+WIRELESS_802_11g_FIXEDRATE=54000
+
+wireless_802_11x_check_mode()
+{
+	local mode=$1
+	if [[ $mode != $WIRELESS_802_11b_MODE && $mode != $WIRELESS_802_11g_MODE ]]
+	then
+		echo 1
+	fi
+}
+
+wireless_802_11x_generate_get_commands()
+{
+	local interface=$1 #(ath0,eth0...)
+
+	echo -n "iwpriv $interface get_mode ; "
+	for queue in $WIRELESS_802_11x_QUEUES
+	do
+		for flag in 0 1
+		do
+			echo -n "iwpriv $interface get_cwmin $queue $flag ; "
+			echo -n "iwpriv $interface get_cwmax $queue $flag ; "
+			echo -n "iwpriv $interface get_aifs $queue $flag ; "
+			echo -n "iwpriv $interface get_txoplimit $queue $flag ; "
+		done
+	done
+	echo -n "true"
+}
+
+wireless_802_11x_generate_set_commands()
+{
+	local interface=$1 #(ath0,eth0...)
+	local mode=$2
+	local slottime=$3
+	local fixedrate=$4
+
+	echo -n "iwpriv $interface mode $mode ; "
+	echo -n "sysctl dev.wifi0.slottime=$slottime ; "
+	echo -n "sysctl dev.wifi0.fixedrate=$fixedrate ; "
+	for queue in $WIRELESS_802_11x_QUEUES
+	do
+		for flag in 0 1
+		do
+			echo -n "iwpriv $interface cwmin $queue $flag $WIRELESS_802_11x_CWMIN ; "
+			echo -n "iwpriv $interface cwmax $queue $flag $WIRELESS_802_11x_CWMAX ; "
+			echo -n "iwpriv $interface aifs $queue $flag $WIRELESS_802_11x_AIFS ; "
+			echo -n "iwpriv $interface txoplimit $queue $flag $WIRELESS_802_11x_TXOP ; "
+		done
+	done
+	echo -n "echo 802.11b flags are set"
+}
+
+wireless_802_11x_set_network()
+{
+	local mode=$1
+	verbose "set on all clients and ap 802.$mode flags"
+	local slottime=
+	local fixedrate=
+	local set_network_flag=
+	case $mode in
+		11b)	slottime=$WIRELESS_802_11b_SLOT_TIME
+			fixedrate=$WIRELESS_802_11b_FIXEDRATE
+			;;
+		11g)	slottime=$WIRELESS_802_11g_SLOT_TIME
+			fixedrate=$WIRELESS_802_11g_FIXEDRATE
+			;;
+		*) 	set_network_flag=1
+			error "No wireless mode \"$mode\". Not setting network." 
+			;;
+	esac
+	if [[ -z $set_network_flag ]]; then
+		local set_command=$(wireless_802_11x_generate_set_commands ath0 $mode $slottime $fixedrate)
+		remote_run_command_on_client root ap "$set_command"
+		remote_run_command_on_all_clients root  "$set_command"
+	fi
+}
+
 wireless_atheros_set_no_accel_to_network()
 {
 	verbose "set on all clients and ap atheros no accell flags"

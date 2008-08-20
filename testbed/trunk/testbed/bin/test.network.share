@@ -7,7 +7,6 @@ LIB_PATH="$(dirname $0)/../lib"
 source $LIB_PATH/io
 source $LIB_PATH/opts
 source $LIB_PATH/tcpdump
-source $LIB_PATH/802.11b
 source $LIB_PATH/wireless
 source $LIB_PATH/madwifi
 source $LIB_PATH/plots
@@ -28,10 +27,10 @@ usage()
 {
 	prog=`basename $0`
 	cat <<- EOF
-		usage: $prog -d directory -t seconds -b bandwidth -n number [-p] [-v]
+		usage: $prog -d directory -t seconds -b bandwidth -n number [-m wireless mode] [-p] [-v]
 
 		This script will run udp test of shering network. It will issue all the clients at the same time to send udp to the access point.
-		EXAMPLE: $prog  -d test_dir -t "10,20,300" -b "2,4,30" -n 16 -v
+		EXAMPLE: $prog  -d test_dir -t "10,20,300" -b "2,4,30" -n 16 -v -m 11g
 
 		OPTIONS:
 			-d	directory for results
@@ -39,6 +38,7 @@ usage()
 			-b	bandwidths to test
 			-n	number of clients to test together
 			-c	clients (just a list of clients eg. "3,16,7,9")
+			-m	network mode 11b(default), 11g
 			-p	generate just plots (without running experiment)
 			-g	don't generate plots
 			-h	Show this message
@@ -49,13 +49,14 @@ usage()
 
 get_opts()
 {
-	while getopts "d:t:b:n:c:pgvhx" options; do
+	while getopts "d:t:b:n:c:m:pgvhx" options; do
 		case $options in
 			d) TEST_OUTPUT_DIR=$OPTARG;;
 			t) TIMES=`echo $OPTARG | tr ',' ' '`;;
 			b) BANDWIDTHS=`echo $OPTARG | tr ',' ' '`;;
 			n) END=$OPTARG;;
 			c) CLIENTS=`echo $OPTARG | tr ',' ' '`;;
+			m) WIRELESS_802_11x_MODE=$OPTARG;;
 			p) PLOTS=1;;
 			g) NO_PLOTS=1;;
 			v) VERBOSE=1;;
@@ -76,6 +77,11 @@ check_for_required_opts()
 		exit 1
 	fi
 	check_clients_opts
+	if [[ -n $(wireless_802_11x_check_mode $WIRELESS_802_11x_MODE) ]]
+	then
+		error "No wireless mode \"$WIRELESS_802_11x_MODE\""
+		exit 1
+	fi
 }
 
 process_options()
@@ -265,7 +271,7 @@ main()
 	if [[ -z $PLOTS ]]; then
 		wireless_atheros_set_no_accel_to_network
 		wireless_set_all_clients_minimum_txpower
-		wireless_802_11b_set_network
+		wireless_802_11x_set_network $WIRELESS_802_11x_MODE
 		iterate_time_and_bandwidth
 	fi
 	io_global_testbed_release_lock

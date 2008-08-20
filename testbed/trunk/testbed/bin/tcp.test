@@ -7,7 +7,6 @@ LIB_PATH="$(dirname $0)/../lib"
 source $LIB_PATH/io
 source $LIB_PATH/opts
 source $LIB_PATH/tcpdump
-source $LIB_PATH/802.11b
 source $LIB_PATH/wireless
 source $LIB_PATH/madwifi
 source $LIB_PATH/tcp
@@ -26,7 +25,7 @@ NO_PLOTS= # Initial value will generate plots
 DIR_FOR_PLOTS="plots"
 STATES_RELATIVE_DIR="states"
 UDP_CLIENTS=
-LINK_CAPASITY=10 # total mb the network can handle
+LINK_CAPASITY=40 # total mb the network can handle
 IPERF_UDP_PORT=5001
 IPERF_TCP_PORT=5002
 TCP_CLIENT=
@@ -35,11 +34,11 @@ usage()
 {
 	prog=`basename $0`
 	cat <<- EOF
-		usage: $prog -d directory -t seconds -u number [-w size] [-p] [-v]
+		usage: $prog -d directory -t seconds -u number [-w size] [-m wireless mode] [-p] [-v] 
 
 		will run TCP related tests
 
-		EXAMPLE: $prog  -d test_dir -t "10,20,300" -u 2 -v
+		EXAMPLE: $prog  -d test_dir -t "10,20,300" -u 2 -v -m 11g
 
 		OPTIONS:
 			-d	directory for results
@@ -50,6 +49,7 @@ usage()
 			-c	clients (just a list of clients eg. "3,16,7,9")
 			-u	number of backround udp clients
 			-w	tcp window size (default 10MB)
+			-m	network mode 11b(default), 11g
 			-p	generate just plots (without running experiment)
 			-g	don't generate plots
 			-h	Show this message
@@ -60,7 +60,7 @@ usage()
 
 get_opts()
 {
-	while getopts "d:t:n:c:u:w:spgvhx" options; do
+	while getopts "d:t:n:c:u:w:m:spgvhx" options; do
 		case $options in
 			d) TEST_OUTPUT_DIR=$OPTARG;;
 			t) TIMES=`echo $OPTARG | tr ',' ' '`;;
@@ -68,6 +68,7 @@ get_opts()
 			n) END=$OPTARG;;
 			c) CLIENTS=$(opts_get_clients_list $OPTARG);;
 			u) UDP_CLIENTS=$(opts_get_clients_list $OPTARG);;
+			m) WIRELESS_802_11x_MODE=$OPTARG;;
 			p) PLOTS=1;;
 			g) NO_PLOTS=1;;
 			v) VERBOSE=1;;
@@ -99,6 +100,11 @@ check_for_required_opts()
 		else
 			TCP_CLIENT="client$CLIENTS"
 		fi
+	fi
+	if [[ -n $(wireless_802_11x_check_mode $WIRELESS_802_11x_MODE) ]]
+	then
+		error "No wireless mode \"$WIRELESS_802_11x_MODE\""
+		exit 1
 	fi
 }
 
@@ -240,7 +246,7 @@ set_wireless()
 {
 	wireless_atheros_set_no_accel_to_network
 	wireless_set_all_clients_minimum_txpower
-	wireless_802_11b_set_network
+	wireless_802_11x_set_network $WIRELESS_802_11x_MODE
 }
 
 generate_plots()
