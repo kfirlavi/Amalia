@@ -113,7 +113,7 @@ tcp_plot_madwifi_queue_vs_rawrtt()
 	local plot_description=$5
 	local probe_file=$workdir/$host$TCP_TCPPROBE_LOG_SUFFIX
 	local madwifi_file=$workdir/$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
-	local plot_file="$plots_dir/time.$duration.madwifi.queue.vs.rawrtt.png"
+	local plot_file="$plots_dir/time.$duration.$host.madwifi.queue.vs.rawrtt.png"
 	local plot_data_file=$(echo $plot_file | sed 's/\.png//g').data
 	tcp_generate_madwifi_queue_delays_vs_rawrtt $probe_file $madwifi_file > $plot_data_file
 	gnuplot <<- EOF > $plot_file

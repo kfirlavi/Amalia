@@ -32,6 +32,15 @@ WIRELESS_802_11g_MODE=11g
 WIRELESS_802_11g_SLOT_TIME=9 #refers to the gap in time between 32 slots 
 WIRELESS_802_11g_FIXEDRATE=54000
 
+wireless_get_current_slot_time()
+{
+	case $WIRELESS_802_11x_MODE in
+		11b)	echo $WIRELESS_802_11b_SLOT_TIME ;;
+		11g)	echo $WIRELESS_802_11g_SLOT_TIME ;;
+		*) 	echo "unknown slot time" ;;
+	esac
+}
+
 wireless_802_11x_check_mode()
 {
 	local mode=$1

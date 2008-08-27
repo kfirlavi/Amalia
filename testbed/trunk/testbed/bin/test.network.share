@@ -253,11 +253,17 @@ generate_plots()
 			verbose "Generating plot total MB 'Iperf $plot_title'"
 			plot_png $data_file "$plot_file_name.total_mb" "Iperf $plot_title" "Clients" "KBytes" "1:2"
 			verbose "Generating plot kbits/sec 'Iperf $plot_title'"
-			plot_png $data_file "$plot_file_name.kbits_per_sec" "Iperf $plot_title" "Clients" "Kbits/sec" "1:3"
+			local total_kbits_per_sec=$(io_sum_column_in_file $data_file 3)
+			verbose "Total for all clients: $total_kbits_per_sec kbits/sec"
+			plot_png $data_file \
+			         "$plot_file_name.kbits_per_sec" \
+				 "Iperf $plot_title\nTotal for all clients: $total_kbits_per_sec Kbits/sec" \
+				 "Clients" "Kbits/sec" "1:3"
 			release_temp_file $data_file
 
 			generate_tcpdump_plots "$workdir" "$plots_dir" "$file_name" "$plot_title"
 			madwifi_generate_delay_histogram_plot_for_all_clients "$workdir" "$plot_file_name" "$plot_title"
+			madwifi_plot_queue_occupancy_vs_queueing_delay_for_all_clients "$workdir" "$plot_file_name" "$plot_title"
 		done
 	done
 	plots_generate_index_file $plots_dir
@@ -267,14 +273,14 @@ main()
 {
 	process_options
 	io_backup_commad $TEST_OUTPUT_DIR
-	io_global_testbed_lock
 	if [[ -z $PLOTS ]]; then
+		io_global_testbed_lock
 		wireless_atheros_set_no_accel_to_network
 		wireless_set_all_clients_minimum_txpower
 		wireless_802_11x_set_network $WIRELESS_802_11x_MODE
 		iterate_time_and_bandwidth
+		io_global_testbed_release_lock
 	fi
-	io_global_testbed_release_lock
 	if [[ -z $NO_PLOTS ]]; then
 		generate_plots
 	fi

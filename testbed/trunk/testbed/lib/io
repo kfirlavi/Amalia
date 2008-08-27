@@ -165,3 +165,17 @@ io_backup_commad()
 	create_directory $workdir
 	echo "$(io_get_date_and_time) $IO_COMMAND" >> $workdir/$IO_COMMAND_HISTORY_FILE
 }
+
+io_sum_column_in_file()
+{
+	local file=$1
+	local col=$2
+	local count=0
+	local i=0
+	for i in $(cat $file | cut -d ' ' -f $col)
+	do
+		count=$(echo "$count+$i" | bc)
+	done
+	echo $count
+}
+

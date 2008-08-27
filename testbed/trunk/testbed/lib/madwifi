@@ -23,6 +23,7 @@ MADWIFI_COL_ENQUEUE=1
 MADWIFI_COL_ACK=2
 MADWIFI_COL_QUEUE=3
 MADWIFI_COL_TOTAL_QUEUED=5
+MADWIFI_COL_QUEUE_OCCUPANCY=9
 MADWIFI_COL_NUMBER_OF_RETRIES=10
 MADWIFI_COL_TCP_SEQ=12
 MADWIFI_COL_TCP_ACK_SEQ=13
@@ -205,7 +206,7 @@ madwifi_calculate_delays_from_timestamps()
 	local prev_t_ack=0
 	local t_enqueue=
 	local t_ack=
-	local queue_delay= 
+	local mac_delay= 
 	local retries=
 	cat $file | cut -f "$MADWIFI_COL_ENQUEUE $MADWIFI_COL_ACK $MADWIFI_COL_NUMBER_OF_RETRIES" \
 	| while read t_enqueue t_ack retries
@@ -213,14 +214,47 @@ madwifi_calculate_delays_from_timestamps()
 		if [[ $prev_t_ack -gt $t_enqueue ]]; then 
 			# current packet was enqueued before 
 			# previouse packet finished sending
-			queue_delay=$((t_ack-prev_t_ack))
+			mac_delay=$((t_ack-prev_t_ack))
 		else
 			# previous packet got ack before this packet 
 			# entered the queue
-			queue_delay=$((t_ack-t_enqueue))
+			mac_delay=$((t_ack-t_enqueue))
 		fi
 		prev_t_ack=$t_ack
-		echo $queue_delay $retries
+		echo $mac_delay $retries
+	done
+}
+
+madwifi_calculate_queue_occupancy_vs_queueing_delay()
+{
+	local file=$1 # gets a clean madwifi timing dump file
+	#madwifi_check_timing_dumpfile $file
+	local prev_t_ack=0
+	local t_enqueue=
+	local t_ack=
+	local queue_delay= 
+	local mac_delay= 
+	local total_delay=
+	local queue_occupancy=
+	cat $file | cut -f "$MADWIFI_COL_ENQUEUE $MADWIFI_COL_ACK $MADWIFI_COL_QUEUE_OCCUPANCY" \
+	| while read t_enqueue t_ack queue_occupancy
+	do
+		if [[ $prev_t_ack -gt $t_enqueue ]]; then 
+			# current packet was enqueued before 
+			# previouse packet finished sending
+			# this is how it should be done logicaly
+			#mac_delay=$((t_ack-prev_t_ack))
+			#total_delay=$((t_ack-t_enqueue))
+			#queue_delay=$((total_delay-mac_delay))
+			# this is after reducing the 3 equations to 1
+			queue_delay=$(((prev_t_ack-t_enqueue)/1000))
+		else
+			# previous packet got ack before this packet 
+			# entered the queue
+			queue_delay=0
+		fi
+		prev_t_ack=$t_ack
+		echo $queue_delay $queue_occupancy
 	done
 }
 
@@ -318,7 +352,7 @@ madwifi_generate_delay_histogram_plot()
 			"$datafile" index 0 using 1:2 with linespoints title '' axis x1y1, \
 			"$datafile" index 0 using 1:3 with points title 'retries' axis x1y2
 
-		set title "$plot_title\nZoom 32 * 20usec spikes"
+		set title "$plot_title\nZoom 32 * $(wireless_get_current_slot_time)usec spikes"
 		set y2label "Total retries per delay"
 		set origin 0.5,0.0
 		set size 0.50,1.0
@@ -367,5 +401,35 @@ madwifi_generate_delay_histogram_plot_for_all_clients()
 		verbose "Generating madwifi delay histogram plot for client$c"
 		madwifi_generate_delay_histogram_data_file_indexed $filename_prefix > $delay_frequency_file
 		madwifi_generate_delay_histogram_plot $delay_frequency_file $filename_prefix "$plots_title"
+	done
+}
+
+madwifi_plot_queue_occupancy_vs_queueing_delay_for_all_clients()
+{
+	local workdir=$1
+	local plots_filename_head=$2
+	local plots_title=$3
+	for c in $CLIENTS
+	do
+		local host="client$c"
+		local madwifi_dumpfile=$workdir/$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
+		local plot_file="$plots_dir/time.$duration.madwifi.queue.vs.rawrtt.png"
+		local plot_prefix="$plots_filename_head.$host$MADWIFI_TIMING_DUMPFILE_SUFFIX.queue.delay.vs.queue.occupancy"
+		local data_file="$plot_prefix.data"
+		local plot_file="$plot_prefix.png"
+
+		verbose "Generating madwifi queue occupancy vs queueing delay plot for $host"
+		madwifi_calculate_queue_occupancy_vs_queueing_delay $madwifi_dumpfile > $data_file
+		gnuplot <<- EOF > $plot_file
+			set term png size $MADWIFI_PNG_SIZE
+			set title "Madwifi queue delays vs queue occupancy for $host\n$plot_title"
+			set xlabel 'queue occupancy'
+			set ylabel 'queue delay (ms)'
+			set xtics 5
+			set mxtics 5
+			set pointsize 0.2
+			# lt 3 is blue
+			plot "$data_file" using 2:1 with points lt 3 title ''
+			EOF
 	done
 }
