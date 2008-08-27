@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+
 usage()
 {
 prog=`basename $0`
