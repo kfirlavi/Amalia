@@ -1105,8 +1105,12 @@ ath_vap_create(struct ieee80211com *ic, const char *name, int unit,
 #endif
 
 	/* Let rate control register proc entries for the VAP */
+#ifdef FIXED_RATE
+// no rate control algorithm
+#else
 	if (sc->sc_rc->ops->dynamic_proc_register)
 		sc->sc_rc->ops->dynamic_proc_register(vap);
+#endif
 
 	/*
 	 * Change the interface type for monitor mode.
@@ -4849,8 +4853,11 @@ ath_node_alloc(struct ieee80211_node_table *nt,struct ieee80211vap *vap)
 	 * to decide which mgt rate to use
 	 */
 	an->an_node.ni_vap = vap;
+#ifdef FIXED_RATE
+// no rate control algorithm
+#else
 	sc->sc_rc->ops->node_init(sc, an);
-
+#endif
 	/* U-APSD init */
 	STAILQ_INIT(&an->an_uapsd_q);
 	an->an_uapsd_qdepth = 0;
@@ -4922,7 +4929,11 @@ ath_node_free(struct ieee80211_node *ni)
 {
 	struct ath_softc *sc = ni->ni_ic->ic_dev->priv;
 
+#ifdef FIXED_RATE
+// no rate control algorithm
+#else
 	sc->sc_rc->ops->node_cleanup(sc, ATH_NODE(ni));
+#endif
 	sc->sc_node_free(ni);
 #ifdef ATH_SUPERG_XR
 	ath_grppoll_period_update(sc);
@@ -6898,13 +6909,19 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 				&rix, &try0, &txrate);
 #endif /* FIXED_RATE */
 #ifdef FIXED_RATE
+			/* from Beacon code */
+			//rix = sc->sc_minrateix;
+			//rt = sc->sc_currates;
 			/* get the rate from sysctl, or /proc/sys */
 			rix = ath_tx_findindex(rt, sc->sc_fixedrate);
 			txrate = rt->info[rix].rateCode;
+			if (shortPreamble)
+				txrate |= rt->info[rix].shortPreamble;
 
 			/* no multirate retries when try0==ATH_TXMAXTRY */
 			try0 = ATH_TXMAXTRY;
 #endif /* FIXED_RATE */
+
 
 			/* Ratecontrol sometimes returns invalid rate index */
 			if (rix != 0xff)
@@ -7160,9 +7177,8 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
      * need this or the ACK timestamps will not be correct 
      * several frames will be handled in quick succesion
      */
-    flags |= HAL_TXDESC_INTREQ; 
+			flags |= HAL_TXDESC_INTREQ; 
 #endif /* TIMING_INFO */
-
 	DPRINTF(sc, ATH_DEBUG_XMIT, "%s: set up txdesc: pktlen %d hdrlen %d "
 		"atype %d txpower %d txrate %d try0 %d keyix %d ant %d flags %x "
 		"ctsrate %d ctsdur %d icvlen %d ivlen %d comp %d\n",
@@ -7198,10 +7214,12 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 	 * when the hardware supports multi-rate retry and
 	 * we don't use it.
 	 */
-	if (try0 != ATH_TXMAXTRY)
+	if (try0 != ATH_TXMAXTRY){
+	// FIXED_RATE warn about multi-rate stuff
+		printk(KERN_DEBUG "MULTI_RATE_RETRY!\n");
 		sc->sc_rc->ops->setupxtxdesc(sc, an, ds, shortPreamble,
 					     skb->len, rix);
-
+	}
 #ifndef ATH_SUPERG_FF
 	ds->ds_link = 0;
 	ds->ds_data = bf->bf_skbaddr;
@@ -7465,9 +7483,13 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			 * w/o waiting for an ack.  In those cases the rssi
 			 * and retry counts will be meaningless.
 			 */
+#ifdef FIXED_RATE
+// Let's not involve the rate control algorithm at all.
+#else
 			if ((ds->ds_txstat.ts_status & HAL_TXERR_FILT) == 0 &&
 			    (bf->bf_flags & HAL_TXDESC_NOACK) == 0)
 				sc->sc_rc->ops->tx_complete(sc, an, ds);
+#endif
 			/*
 			 * Reclaim reference to node.
 			 *
@@ -8214,7 +8236,11 @@ ath_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 		/*
 		 * Notify the rate control algorithm.
 		 */
+#ifdef FIXED_RATE
+// no rate control algorithm
+#else
 		sc->sc_rc->ops->newstate(vap, nstate);
+#endif
 		goto done;
 	}
 	ni = vap->iv_bss;
@@ -8248,8 +8274,11 @@ ath_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 	 * Notify the rate control algorithm so rates
 	 * are setup should ath_beacon_alloc be called.
 	 */
+#ifdef FIXED_RATE
+// no rate control algorithm
+#else
 	sc->sc_rc->ops->newstate(vap, nstate);
-
+#endif
 	if (vap->iv_opmode == IEEE80211_M_MONITOR) {
 		/* nothing to do */;
 	} else if (nstate == IEEE80211_S_RUN) {
@@ -8723,8 +8752,11 @@ ath_newassoc(struct ieee80211_node *ni, int isnew)
 	struct ieee80211vap *vap = ni->ni_vap;
 	struct ath_softc *sc = ic->ic_dev->priv;
 
+#ifdef FIXED_RATE
+// no rate control algorithm
+#else
 	sc->sc_rc->ops->newassoc(sc, ATH_NODE(ni), isnew);
-
+#endif
 	/* are we supporting compression? */
 	if (!(vap->iv_ath_cap & ni->ni_ath_flags & IEEE80211_NODE_COMP))
 		ni->ni_ath_flags &= ~IEEE80211_NODE_COMP;
