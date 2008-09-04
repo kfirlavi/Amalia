@@ -64,7 +64,7 @@
 
 #ifdef MADWIFI_TCP_INFO
 #include <net/tcp.h>
-#endif /* MADWIFI_TCP_INFO */
+#endif
 
 
 #include "if_ethersubr.h"		/* for ETHER_IS_MULTICAST */
@@ -474,7 +474,7 @@ ath_attach(u_int16_t devid, struct net_device *dev, HAL_BUS_TAG tag)
 #ifdef FIXED_RATE
 	/* sysctl fixedrate stuff 11Mbps for starters */
 	sc->sc_fixedrate = 11000;
-#endif /* FIXED_RATE */
+#endif
 	/*
 	 * Check if the device has hardware counters for PHY
 	 * errors.  If so we need to enable the MIB interrupt
@@ -1104,10 +1104,8 @@ ath_vap_create(struct ieee80211com *ic, const char *name, int unit,
 	vap->iv_comp_set = ath_comp_set;
 #endif
 
+#ifndef FIXED_RATE
 	/* Let rate control register proc entries for the VAP */
-#ifdef FIXED_RATE
-// no rate control algorithm
-#else
 	if (sc->sc_rc->ops->dynamic_proc_register)
 		sc->sc_rc->ops->dynamic_proc_register(vap);
 #endif
@@ -2337,7 +2335,7 @@ ath_tx_txqaddbuf(struct ath_softc *sc, struct ieee80211_node *ni,
 	* Want to be sure timestamping in correct place, and inside spinlock 
 	*/     
 	do_gettimeofday(&(bf->time_stamp));
-#endif /* TIMING_INFO */
+#endif
 	ATH_TXQ_UNLOCK(txq);
 
 	sc->sc_devstats.tx_packets++;
@@ -4853,9 +4851,7 @@ ath_node_alloc(struct ieee80211_node_table *nt,struct ieee80211vap *vap)
 	 * to decide which mgt rate to use
 	 */
 	an->an_node.ni_vap = vap;
-#ifdef FIXED_RATE
-// no rate control algorithm
-#else
+#ifndef FIXED_RATE
 	sc->sc_rc->ops->node_init(sc, an);
 #endif
 	/* U-APSD init */
@@ -4929,9 +4925,7 @@ ath_node_free(struct ieee80211_node *ni)
 {
 	struct ath_softc *sc = ni->ni_ic->ic_dev->priv;
 
-#ifdef FIXED_RATE
-// no rate control algorithm
-#else
+#ifndef FIXED_RATE
 	sc->sc_rc->ops->node_cleanup(sc, ATH_NODE(ni));
 #endif
 	sc->sc_node_free(ni);
@@ -6839,7 +6833,7 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
              leave this in fixedrate for now
           */
           shortPreamble = AH_FALSE;
-#endif /* FIXED_RATE */
+#endif
 
 
 	an = ATH_NODE(ni);
@@ -6907,7 +6901,7 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 			/* when fixed rate is on, we don't need to find the rate */
 			sc->sc_rc->ops->findrate(sc, an, shortPreamble, skb->len,
 				&rix, &try0, &txrate);
-#endif /* FIXED_RATE */
+#endif
 #ifdef FIXED_RATE
 			/* from Beacon code */
 			//rix = sc->sc_minrateix;
@@ -6920,7 +6914,7 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 
 			/* no multirate retries when try0==ATH_TXMAXTRY */
 			try0 = ATH_TXMAXTRY;
-#endif /* FIXED_RATE */
+#endif
 
 
 			/* Ratecontrol sometimes returns invalid rate index */
@@ -7178,7 +7172,7 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
      * several frames will be handled in quick succesion
      */
 			flags |= HAL_TXDESC_INTREQ; 
-#endif /* TIMING_INFO */
+#endif
 	DPRINTF(sc, ATH_DEBUG_XMIT, "%s: set up txdesc: pktlen %d hdrlen %d "
 		"atype %d txpower %d txrate %d try0 %d keyix %d ant %d flags %x "
 		"ctsrate %d ctsdur %d icvlen %d ivlen %d comp %d\n",
@@ -7329,11 +7323,11 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 	unsigned long uapsdq_lockflags = 0;
 #ifdef TIMING_INFO
 	struct timeval timestamp_after_ack;
-#endif /* TIMING_INFO */
+#endif
 #ifdef MADWIFI_TCP_INFO
 	__u32 tcp_seq = 0;
 	__u32 tcp_ack_seq = 0;
-#endif /* MADWIFI_TCP_INFO */
+#endif
 
 	DPRINTF(sc, ATH_DEBUG_TX_PROC, "%s: tx queue %d (0x%x), link %p\n", __func__,
 		txq->axq_qnum, ath_hal_gettxbuf(sc->sc_ah, txq->axq_qnum),
@@ -7382,7 +7376,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 
 #ifdef TIMING_INFO
 		do_gettimeofday(&timestamp_after_ack);
-#endif /* TIMING_INFO */
+#endif
 #ifdef MADWIFI_TCP_INFO
 		/* If the poiner to the TCP header exists
 		 * then we get the sequence and ack number of the tcp packet 
@@ -7391,7 +7385,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			tcp_seq = ((struct tcphdr *) bf->bf_skb->transport_header)->seq;
 			tcp_ack_seq = ((struct tcphdr *) bf->bf_skb->transport_header)->ack_seq;
 		}
-#endif /* MADWIFI_TCP_INFO */
+#endif
 
 		ATH_TXQ_REMOVE_HEAD(txq, bf_list);
 		if (uapsdq)
@@ -7407,7 +7401,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 		printk(KERN_DEBUG "MADWIFI_DELAY_TIMESTAMPS\t%lu%06ld\t%lu%06ld\t%d\t%d\t%d\t%d\t%d\t%d\t%u\t%d\t%d"
 #ifdef MADWIFI_TCP_INFO
 			"\t%u\t%u"
-#endif /* MADWIFI_TCP_INFO */
+#endif
 			"\n",
 			/* time added to tx queue */
 			bf->time_stamp.tv_sec,			/* seconds since Jan. 1, 1970 */
@@ -7429,9 +7423,9 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			,
 			ntohl(tcp_seq),				/* tcp sequence number */
 			ntohl(tcp_ack_seq)			/* tcp ack sequence number */
-#endif /* MADWIFI_TCP_INFO */
+#endif
 		);
-#endif /* TIMING_INFO */
+#endif
 
 		ni = bf->bf_node;
 		if (ni != NULL) {
@@ -7483,9 +7477,7 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			 * w/o waiting for an ack.  In those cases the rssi
 			 * and retry counts will be meaningless.
 			 */
-#ifdef FIXED_RATE
-// Let's not involve the rate control algorithm at all.
-#else
+#ifndef FIXED_RATE
 			if ((ds->ds_txstat.ts_status & HAL_TXERR_FILT) == 0 &&
 			    (bf->bf_flags & HAL_TXDESC_NOACK) == 0)
 				sc->sc_rc->ops->tx_complete(sc, an, ds);
@@ -8233,12 +8225,10 @@ ath_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 			ath_hal_intrset(ah, sc->sc_imask &~ HAL_INT_GLOBAL);
 			sc->sc_beacons = 0;
 		}
+#ifndef FIXED_RATE
 		/*
 		 * Notify the rate control algorithm.
 		 */
-#ifdef FIXED_RATE
-// no rate control algorithm
-#else
 		sc->sc_rc->ops->newstate(vap, nstate);
 #endif
 		goto done;
@@ -8270,13 +8260,11 @@ ath_newstate(struct ieee80211vap *vap, enum ieee80211_state nstate, int arg)
 				ath_hal_keysetmac(ah, i, ni->ni_bssid);
 	}
 
+#ifndef FIXED_RATE
 	/*
 	 * Notify the rate control algorithm so rates
 	 * are setup should ath_beacon_alloc be called.
 	 */
-#ifdef FIXED_RATE
-// no rate control algorithm
-#else
 	sc->sc_rc->ops->newstate(vap, nstate);
 #endif
 	if (vap->iv_opmode == IEEE80211_M_MONITOR) {
@@ -8752,9 +8740,7 @@ ath_newassoc(struct ieee80211_node *ni, int isnew)
 	struct ieee80211vap *vap = ni->ni_vap;
 	struct ath_softc *sc = ic->ic_dev->priv;
 
-#ifdef FIXED_RATE
-// no rate control algorithm
-#else
+#ifndef FIXED_RATE
 	sc->sc_rc->ops->newassoc(sc, ATH_NODE(ni), isnew);
 #endif
 	/* are we supporting compression? */
@@ -9481,7 +9467,7 @@ enum {
 	ATH_MAXVAPS		= 26,
 #ifdef FIXED_RATE
 	ATH_FIXEDRATE		= 27, 
-#endif /* FIXED_RATE */
+#endif
 };
 
 static int
@@ -9623,7 +9609,7 @@ ATH_SYSCTL_DECL(ath_sysctl_halparam, ctl, write, filp, buffer, lenp, ppos)
 			case ATH_FIXEDRATE:
 				sc->sc_fixedrate = val;
 				break;
-#endif /* FIXED_RATE */
+#endif
 			default:
 				return -EINVAL;
 			}
@@ -9693,7 +9679,7 @@ ATH_SYSCTL_DECL(ath_sysctl_halparam, ctl, write, filp, buffer, lenp, ppos)
 		case ATH_FIXEDRATE:
 			val = sc->sc_fixedrate;
 			break;
-#endif /* FIXED_RATE */
+#endif
 		default:
 			return -EINVAL;
 		}
@@ -9831,7 +9817,7 @@ static const ctl_table ath_sysctl_template[] = {
 	  .proc_handler = ath_sysctl_halparam,
 	  .extra2       = (void *)ATH_FIXEDRATE, 
 	},
-#endif /* FIXED_RATE */
+#endif
 	{ 0 }
 };
 
