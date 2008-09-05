@@ -82,9 +82,7 @@ scan_host_ssh_port_from_remote_host()
 	local src=$1
 	local dst=$2
 	remote_run_command_on_client root $src "$NMAP_SSH_COMMAND $dst" \
-		| egrep -B 2 "filtered|closed" \
-		| grep Interesting \
-		| cut -d ' ' -f 4 
+		| egrep "22/tcp open  ssh"
 }
 
 print_no_ping()
@@ -133,11 +131,31 @@ check_connection_from_host_to_wireless_hosts()
 		&& error "SSH port on $host is closed. Can't check for wireless connection from $host to wireless hosts" \
 		&& io_global_testbed_release_lock \
 		&& exit
-	for h in $(generate_list_of_wireless_hosts)
+	for h in $(generate_list_of_wireless_hosts | sed 's/wsrc//g')
 	do
 		local ret=$(scan_host_ssh_port_from_remote_host $host $h)
-		[[ -n $ret ]] && print_port_closed $host $h
+		debug "0 ret=$ret"
+		if [[ -z $ret ]]; then
+			debug "1 ret=$ret"
+			# try to reload the interface on host and try again
+			local util_hostname=$(echo $h | sed 's/w//')
+			reload_host_wireless_interface $util_hostname ath0
+			debug "2 ret=$ret"
+			ret=$(scan_host_ssh_port_from_remote_host $host $h)
+			debug "3 ret=$ret"
+		fi
+		[[ -z $ret ]] && print_port_closed $host $h
 	done
+}
+
+reload_host_wireless_interface()
+{
+	local host=$1
+	local iface=$2
+	verbose "Reloading interface $iface on $host"
+	remote_run_command_on_client root $host "ifdown $iface" 2> /dev/null
+	remote_run_command_on_client root $host "ifup $iface" 2> /dev/null
+	sleep 1
 }
 
 check_connection_of_wireless_hosts()
