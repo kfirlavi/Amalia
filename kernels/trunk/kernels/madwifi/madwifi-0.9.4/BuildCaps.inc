@@ -2,11 +2,11 @@
 # defaults
 #
 ifndef ATH_CAP_SUPERG_FF
-export ATH_CAP_SUPERG_FF=1
+export ATH_CAP_SUPERG_FF=0
 endif
 
 ifndef ATH_CAP_DYNTURBO
-export ATH_CAP_DYNTURBO=1
+export ATH_CAP_DYNTURBO=0
 endif
 
 ifndef ATH_CAP_SUPERG_COMP
@@ -14,7 +14,7 @@ export ATH_CAP_SUPERG_COMP=0
 endif
 
 ifndef ATH_CAP_XR
-export ATH_CAP_XR=1
+export ATH_CAP_XR=0
 endif
 
 ifndef ATH_CAP_TPC
@@ -29,19 +29,19 @@ endif
 # directives
 #
 ifneq ($(strip $(ATH_CAP_SUPERG_FF)),0)
-COPTS+= -DATH_SUPERG_FF=1
+COPTS+= -DATH_SUPERG_FF=0
 endif
 
 ifneq ($(strip $(ATH_CAP_DYNTURBO)),0)
-COPTS+= -DATH_SUPERG_DYNTURBO=1 -DATH_TURBO_SCAN=1
+COPTS+= -DATH_SUPERG_DYNTURBO=0 -DATH_TURBO_SCAN=0
 endif
 
 ifneq ($(strip $(ATH_CAP_SUPERG_COMP)),0)
-COPTS+= -DATH_SUPERG_COMP=1
+COPTS+= -DATH_SUPERG_COMP=0
 endif
 
 ifneq ($(strip $(ATH_CAP_XR)),0)
-COPTS+= -DATH_SUPERG_XR=1
+COPTS+= -DATH_SUPERG_XR=0
 endif
 
 ifneq ($(strip $(ATH_CAP_TPC)),0)
