@@ -2582,11 +2582,17 @@ ath_hardstart(struct sk_buff *skb, struct net_device *dev)
 	struct ieee80211vap *vap;
 	int framecnt;
 	int requeue = 0;
+#ifdef FIXED_RATE
+	struct ath_node *an;
+	struct ath_txq *txq = NULL;
+#endif
 #ifdef ATH_SUPERG_FF
 	int pktlen;
 	struct ieee80211com *ic = &sc->sc_ic;
+#ifndef FIXED_RATE
 	struct ath_node *an;
 	struct ath_txq *txq = NULL;
+#endif
 	int ff_flush;
 #endif
 
@@ -2761,8 +2767,24 @@ ath_hardstart(struct sk_buff *skb, struct net_device *dev)
 ff_bypass:
 
 #else /* ATH_SUPERG_FF */
-
+#ifdef FIXED_RATE
+	an = ATH_NODE(ni);
+	txq = sc->sc_ac2q[skb->priority];
+#endif /* FIXED_RATE */
 	ATH_HARDSTART_GET_TX_BUF_WITH_LOCK;
+#ifdef FIXED_RATE
+	if(txq == NULL){
+		printk(KERN_DEBUG "TXQ NULL!\n");
+	}
+	//printk(KERN_DEBUG "QUEUE:%d\tTDC%d\n",txq->axq_depth,TAIL_DROP_COUNT);
+	if (txq->axq_depth > TAIL_DROP_COUNT) {
+		//printk(KERN_DEBUG "QUEUE FULL %d\n",txq->axq_depth);
+		sc->sc_stats.ast_tx_discard++;
+		/* queue is full, let the kernel backlog the skb */
+		requeue = 1;
+		goto hardstart_fail;
+	}
+#endif /* FIXED_RATE */
 
 #endif /* ATH_SUPERG_FF */
 
