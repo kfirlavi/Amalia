@@ -7399,6 +7399,13 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 #ifdef TIMING_INFO
 		do_gettimeofday(&timestamp_after_ack);
 #endif
+
+		ATH_TXQ_REMOVE_HEAD(txq, bf_list);
+		if (uapsdq)
+			ATH_TXQ_UAPSDQ_UNLOCK_IRQ(txq);
+		else
+			ATH_TXQ_UNLOCK(txq);
+
 #ifdef MADWIFI_TCP_INFO
 		/* If the poiner to the TCP header exists
 		 * then we get the sequence and ack number of the tcp packet 
@@ -7408,13 +7415,6 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 			tcp_ack_seq = ((struct tcphdr *) bf->bf_skb->transport_header)->ack_seq;
 		}
 #endif
-
-		ATH_TXQ_REMOVE_HEAD(txq, bf_list);
-		if (uapsdq)
-			ATH_TXQ_UAPSDQ_UNLOCK_IRQ(txq);
-		else
-			ATH_TXQ_UNLOCK(txq);
-
 #ifdef TIMING_INFO
 		/* get current time and print stats
 		 * ts structure not used in the 0.9.4 (stable) so use
