@@ -2582,17 +2582,11 @@ ath_hardstart(struct sk_buff *skb, struct net_device *dev)
 	struct ieee80211vap *vap;
 	int framecnt;
 	int requeue = 0;
-#ifdef FIXED_RATE
-	struct ath_node *an;
 	struct ath_txq *txq = NULL;
-#endif
 #ifdef ATH_SUPERG_FF
 	int pktlen;
 	struct ieee80211com *ic = &sc->sc_ic;
-#ifndef FIXED_RATE
-	struct ath_node *an;
-	struct ath_txq *txq = NULL;
-#endif
+
 	int ff_flush;
 #endif
 
@@ -2767,24 +2761,17 @@ ath_hardstart(struct sk_buff *skb, struct net_device *dev)
 ff_bypass:
 
 #else /* ATH_SUPERG_FF */
-#ifdef FIXED_RATE
-	an = ATH_NODE(ni);
-	txq = sc->sc_ac2q[skb->priority];
-#endif /* FIXED_RATE */
-	ATH_HARDSTART_GET_TX_BUF_WITH_LOCK;
-#ifdef FIXED_RATE
-	if(txq == NULL){
-		printk(KERN_DEBUG "TXQ NULL!\n");
-	}
-	//printk(KERN_DEBUG "QUEUE:%d\tTDC%d\n",txq->axq_depth,TAIL_DROP_COUNT);
+#ifdef QUEUE_SIZE
+	txq = sc->sc_ac2q[WME_AC_VI];
 	if (txq->axq_depth > TAIL_DROP_COUNT) {
-		//printk(KERN_DEBUG "QUEUE FULL %d\n",txq->axq_depth);
-		sc->sc_stats.ast_tx_discard++;
-		/* queue is full, let the kernel backlog the skb */
-		requeue = 1;
-		goto hardstart_fail;
+			printk(KERN_DEBUG "QUEUE FULL %d\n",txq->axq_depth);
+			sc->sc_stats.ast_tx_discard++;
+			/* queue is full, let the kernel backlog the skb */
+			requeue = 1;
+			goto hardstart_fail;
 	}
-#endif /* FIXED_RATE */
+#endif
+	ATH_HARDSTART_GET_TX_BUF_WITH_LOCK;
 
 #endif /* ATH_SUPERG_FF */
 
@@ -6904,6 +6891,21 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 	case IEEE80211_FC0_TYPE_DATA:
 		atype = HAL_PKT_TYPE_NORMAL;		/* default */
 		
+#ifdef QUEUE_SIZE
+		/*
+		 * Default all non-QoS traffic to the best-effort queue.
+		 */
+		if (wh->i_fc[0] & IEEE80211_FC0_SUBTYPE_QOS) {
+			/* XXX validate skb->priority, remove mask */
+			txq = sc->sc_ac2q[skb->priority & 0x3];
+			if (ic->ic_wme.wme_wmeChanParams.cap_wmeParams[skb->priority].wmep_noackPolicy) {
+				flags |= HAL_TXDESC_NOACK;
+				sc->sc_stats.ast_tx_noack++;
+			}
+		} else
+			txq = sc->sc_ac2q[WME_AC_BE];
+#endif
+
 		if (ismcast) {
 			rix = ath_tx_findindex(rt, vap->iv_mcast_rate);
 			txrate = rt->info[rix].rateCode;
@@ -6924,10 +6926,10 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 			sc->sc_rc->ops->findrate(sc, an, shortPreamble, skb->len,
 				&rix, &try0, &txrate);
 #endif
+#ifdef QUEUE_SIZE
+			txq = sc->sc_ac2q[WME_AC_VI];
+#endif
 #ifdef FIXED_RATE
-			/* from Beacon code */
-			//rix = sc->sc_minrateix;
-			//rt = sc->sc_currates;
 			/* get the rate from sysctl, or /proc/sys */
 			rix = ath_tx_findindex(rt, sc->sc_fixedrate);
 			txrate = rt->info[rix].rateCode;
@@ -6937,7 +6939,6 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 			/* no multirate retries when try0==ATH_TXMAXTRY */
 			try0 = ATH_TXMAXTRY;
 #endif
-
 
 			/* Ratecontrol sometimes returns invalid rate index */
 			if (rix != 0xff)
@@ -6951,6 +6952,7 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 			break;
 		}
 
+#ifndef QUEUE_SIZE
 		/*
 		 * Default all non-QoS traffic to the best-effort queue.
 		 */
@@ -6963,6 +6965,7 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 			}
 		} else
 			txq = sc->sc_ac2q[WME_AC_BE];
+#endif
 		break;
 	default:
 		printk("%s: bogus frame type 0x%x (%s)\n", dev->name,
@@ -7231,8 +7234,9 @@ ath_tx_start(struct net_device *dev, struct ieee80211_node *ni, struct ath_buf *
 	 * we don't use it.
 	 */
 	if (try0 != ATH_TXMAXTRY){
-	// FIXED_RATE warn about multi-rate stuff
-		printk(KERN_DEBUG "MULTI_RATE_RETRY!\n");
+#ifdef FIXED_RATE
+		printk(KERN_DEBUG "MULTI_RATE_RETRY! TXQ:%d - Check FIXED_RATE code. The retries should be the same fixed rate.\n", txq->axq_qnum);
+#endif
 		sc->sc_rc->ops->setupxtxdesc(sc, an, ds, shortPreamble,
 					     skb->len, rix);
 	}

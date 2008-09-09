@@ -63,6 +63,9 @@ INCS += -I$(TOP) -I$(ATH_HAL) -I$(HAL) -I$(WLAN)
 
 EXTRA_CFLAGS+= $(INCS) $(COPTS) -DOPT_AH_H=\"$(HAL)/public/$(TARGET).opt_ah.h\"
 
+ifeq (${QUEUE_SIZE},1)
+EXTRA_CFLAGS+= -DQUEUE_SIZE
+endif
 ifeq (${FIXED_RATE},1)
 EXTRA_CFLAGS+= -DFIXED_RATE
 endif
