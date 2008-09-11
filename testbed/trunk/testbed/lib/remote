@@ -62,3 +62,27 @@ remote_run_command_on_all_clients()
 	done
 	wait_for_pids $pids
 }
+
+remote_network_interface_reset()
+{
+	local host=$1
+	local iface=$2
+	verbose "Reloading interface $iface on $host"
+	remote_run_command_on_client root $host "ifdown $iface" 2> /dev/null
+	remote_run_command_on_client root $host "ifup $iface" 2> /dev/null
+	sleep 1
+}
+
+remote_network_interface_reset_for_all_clients()
+{
+	local iface=$1
+	local pids=
+	remote_network_interface_reset ap $iface
+	for c in $CLIENTS
+	do
+		remote_network_interface_reset client$c $iface &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+}
+

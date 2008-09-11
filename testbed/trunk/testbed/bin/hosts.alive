@@ -139,23 +139,13 @@ check_connection_from_host_to_wireless_hosts()
 			debug "1 ret=$ret"
 			# try to reload the interface on host and try again
 			local util_hostname=$(echo $h | sed 's/w//')
-			reload_host_wireless_interface $util_hostname ath0
+			remote_network_interface_reset $util_hostname ath0
 			debug "2 ret=$ret"
 			ret=$(scan_host_ssh_port_from_remote_host $host $h)
 			debug "3 ret=$ret"
 		fi
 		[[ -z $ret ]] && print_port_closed $host $h
 	done
-}
-
-reload_host_wireless_interface()
-{
-	local host=$1
-	local iface=$2
-	verbose "Reloading interface $iface on $host"
-	remote_run_command_on_client root $host "ifdown $iface" 2> /dev/null
-	remote_run_command_on_client root $host "ifup $iface" 2> /dev/null
-	sleep 1
 }
 
 check_connection_of_wireless_hosts()

@@ -244,9 +244,11 @@ generate_tcp_flows()
 
 set_wireless()
 {
+	remote_network_interface_reset_for_all_clients ath0
 	wireless_atheros_set_no_accel_to_network
 	wireless_set_all_clients_minimum_txpower
 	wireless_802_11x_set_network $WIRELESS_802_11x_MODE
+	wireless_set_channel_to_network ath0 11
 }
 
 generate_plots()

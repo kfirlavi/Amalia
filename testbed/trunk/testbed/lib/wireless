@@ -145,3 +145,12 @@ wireless_set_txqueue_length()
 	verbose "Set $iface txqueuelen to $len on $host"
 	remote_run_command_on_client root $host "ifconfig $iface txqueuelen $len"
 }
+
+wireless_set_channel_to_network()
+{
+	local iface=$1
+	local channel=$2
+	verbose "Set wireless channel to $channel"
+	remote_run_command_on_client root ap "iwconfig $iface channel $channel"
+	remote_run_command_on_all_clients root "iwconfig $iface channel $channel"
+}
