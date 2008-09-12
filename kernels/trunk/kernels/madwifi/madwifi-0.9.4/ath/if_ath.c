@@ -2582,11 +2582,17 @@ ath_hardstart(struct sk_buff *skb, struct net_device *dev)
 	struct ieee80211vap *vap;
 	int framecnt;
 	int requeue = 0;
+#ifdef QUEUE_SIZE
 	struct ath_txq *txq = NULL;
+	struct ieee80211_frame *wh;
+#endif
 #ifdef ATH_SUPERG_FF
 	int pktlen;
 	struct ieee80211com *ic = &sc->sc_ic;
-
+#ifndef QUEUE_SIZE
+	struct ath_txq *txq = NULL;
+	struct ieee80211_frame *wh;
+#endif
 	int ff_flush;
 #endif
 
