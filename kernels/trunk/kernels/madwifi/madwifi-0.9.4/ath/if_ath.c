@@ -7349,6 +7349,8 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 	unsigned long uapsdq_lockflags = 0;
 #ifdef TIMING_INFO
 	struct timeval timestamp_after_ack;
+	/* 32 bit seconds are not required, so mask off highest 16bits */
+	u_int32_t time_stamp_mask=0x0000ffff;
 #endif
 #ifdef MADWIFI_TCP_INFO
 	__u32 tcp_seq = 0;
@@ -7430,10 +7432,10 @@ ath_tx_processq(struct ath_softc *sc, struct ath_txq *txq)
 #endif
 			"\n",
 			/* time added to tx queue */
-			bf->time_stamp.tv_sec,			/* seconds since Jan. 1, 1970 */
+			(time_stamp_mask & bf->time_stamp.tv_sec),			/* seconds since Jan. 1, 1970 */
 			bf->time_stamp.tv_usec,			/* microseconds */
 			/* time after ack */
-			timestamp_after_ack.tv_sec,		/* seconds since Jan. 1, 1970 */
+			(time_stamp_mask & timestamp_after_ack.tv_sec),		/* seconds since Jan. 1, 1970 */
 			timestamp_after_ack.tv_usec,		/* microseconds */
 
 			txq->axq_qnum,                          /* queue number */
