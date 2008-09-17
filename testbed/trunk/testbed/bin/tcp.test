@@ -248,7 +248,7 @@ set_wireless()
 	wireless_atheros_set_no_accel_to_network
 	wireless_set_all_clients_minimum_txpower
 	wireless_802_11x_set_network $WIRELESS_802_11x_MODE
-	wireless_set_channel_to_network ath0 11
+	wireless_set_channel_to_network ath0 $WIRELESS_CHANNEL
 }
 
 generate_plots()
@@ -275,7 +275,7 @@ run_test()
 	local t=
 	for t in $TIMES
 	do
-		verbose_bold "Runnint test for time $t"
+		verbose_bold "Running test for time $t"
 		if [[ -z $TCP_SOURCE ]]; then
 			generate_udp_background_flows $t
 		else
