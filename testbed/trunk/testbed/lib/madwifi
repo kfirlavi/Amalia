@@ -8,10 +8,14 @@ source $LIB_PATH/remote
 # Globals
 MADWIFI_TIMING_DUMPFILE_DIR="/tmp"
 MADWIFI_TIMING_DUMPFILE_SUFFIX=".madwifi.timing"
+MADWIFI_FILTERED_KMSG_SUFFIX=".madwifi.filtered"
+MADWIFI_TIMING_DUMPFILE_COL_SEPERATOR="\t"
 MADWIFI_TIMING_UDP_PACKET_SIZE=1534 # this is for filtering 
+MADWIFI_TIMING_FILETER_QUEUE=2 # this is for filtering 
 MADWIFI_TIMING_LINE_DESCRIPTOR="MADWIFI_DELAY_TIMESTAMPS" 
 MADWIFI_PNG_SIZE="400,300"
 MADWIFI_PNG_DOUBLE_SIZE="800,300"
+MADWIFI_PNG_VERTICAL_DOUBLE_SIZE="400,600"
 MADWIFI_DELAY_MAX_SPIKES_GAP=640 # 32 slots * 20 usec
 MADWIFI_DELAY_MAX_SPIKES_GAP_DIAGRAM_PEDDING_START=100
 MADWIFI_DELAY_MAX_SPIKES_GAP_DIAGRAM_PEDDING_END=30 
@@ -28,98 +32,17 @@ MADWIFI_COL_NUMBER_OF_RETRIES=10
 MADWIFI_COL_TCP_SEQ=12
 MADWIFI_COL_TCP_ACK_SEQ=13
 
-madwifi_start_timing_logging_on_all_clients()
+# filter lines for madwifi timing from kmsg file
+madwifi_filter_kmsg()
 {
-	local pids=
-	for c in $CLIENTS
-	do 
-		madwifi_start_timing_logging "client$c" &
-		pids="$pids $!"
-	done
-	wait_for_pids $pids
-}
-
-madwifi_stop_timing_logging_on_all_clients()
-{
-	local pids=
-	for c in $CLIENTS
-	do 
-		madwifi_stop_timing_logging "client$c" &
-		pids="$pids $!"
-	done
-	wait_for_pids $pids
-}
-
-madwifi_move_timing_dumpfile_for_all_clients()
-{
-	local destdir=$1
-	local pids=
-	for c in $CLIENTS
-	do 
-		madwifi_move_timing_dumpfile "client$c" $destdir &
-		pids="$pids $!"
-	done
-	wait_for_pids $pids
-}
-
-madwifi_filter_udp_packet_size_from_timing_dumpfile_for_all_clients()
-{
-	local destdir=$1
-	local pids=
-	for c in $CLIENTS
-	do 
-		madwifi_filter_udp_packet_size_from_timing_dumpfile "$destdir/client$c$MADWIFI_TIMING_DUMPFILE_SUFFIX" &
-		pids="$pids $!"
-	done
-	wait_for_pids $pids
-}
-
-madwifi_start_timing_logging()
-{
-	local host=$1
-	local dumpfile=$MADWIFI_TIMING_DUMPFILE_DIR/$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
-	verbose "Collecting madwifi timing data on $host"
-	# filter by $MADWIFI_TIMING_LINE_DESCRIPTOR descriptor in the start of the line
-	ssh root@$host "cat /proc/kmsg | grep $MADWIFI_TIMING_LINE_DESCRIPTOR > $dumpfile" 2> /dev/null &
-}
-
-madwifi_stop_timing_logging()
-{
-	local host=$1
-	verbose "kill madwifi timing logging on $host"
-	ssh root@$host "kill \$(ps fax | grep '/proc/kmsg'  | sed 's/^ //' | cut -d ' ' -f 1)"
-}
-
-madwifi_move_timing_dumpfile()
-{
-	local host=$1
-	local destdir=$2
-	local filename=$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
-	local src=$MADWIFI_TIMING_DUMPFILE_DIR/$filename
-	local dst=$destdir/$filename
-	remote_copy_file_from_host root $host $src $dst
-	remote_delete_file_on_host $host $src
-	madwifi_clean_timing_dumpfile $dst
-}
-
-madwifi_clean_timing_dumpfile()
-{
-	local file=$1
+	local file=$1 # gets kmsg file
 	local tempfile=$(create_temp_file)
 	verbose "Cleaning $file from kernel messages and $MADWIFI_TIMING_LINE_DESCRIPTOR"
-	cat $file | cut -f 2- > $tempfile \
-	&& cp $tempfile $file
-	release_temp_file $tempfile
-}
-
-madwifi_filter_udp_packet_size_from_timing_dumpfile()
-{
-	local file=$1
-	local tempfile=$(create_temp_file)
-	verbose "Filtering $file by packet size $MADWIFI_TIMING_UDP_PACKET_SIZE"
-	cp $file $tempfile
-	grep $MADWIFI_TIMING_UDP_PACKET_SIZE $tempfile > $file
-	release_temp_file $tempfile
+	cat $file \
+		| grep $MADWIFI_TIMING_LINE_DESCRIPTOR \
+		| cut -f 2- \
+		| grep -v "[a-Z]" \
+		| awk -F "$MADWIFI_TIMING_DUMPFILE_COL_SEPERATOR" "(\$$MADWIFI_COL_QUEUE == $MADWIFI_TIMING_FILETER_QUEUE) {print \$0}"
 }
 
 # check that a column variabls in a file are distinct
@@ -227,8 +150,9 @@ madwifi_calculate_delays_from_timestamps()
 
 madwifi_calculate_queue_occupancy_vs_queueing_delay()
 {
-	local file=$1 # gets a clean madwifi timing dump file
-	#madwifi_check_timing_dumpfile $file
+	local client=$1
+	local workdir=$2
+	local client_kmsg_file=$workdir/$client$REMOTE_KMSG_FILE_SUFFIX
 	local prev_t_ack=0
 	local t_enqueue=
 	local t_ack=
@@ -236,7 +160,8 @@ madwifi_calculate_queue_occupancy_vs_queueing_delay()
 	local mac_delay= 
 	local total_delay=
 	local queue_occupancy=
-	cat $file | cut -f "$MADWIFI_COL_ENQUEUE $MADWIFI_COL_ACK $MADWIFI_COL_QUEUE_OCCUPANCY" \
+	local filtered_kmsg_file=$(madwifi_generate_filtered_kmsg_file $client $workdir)
+	cat $filtered_kmsg_file | cut -f "$MADWIFI_COL_ENQUEUE $MADWIFI_COL_ACK $MADWIFI_COL_QUEUE_OCCUPANCY" \
 	| while read t_enqueue t_ack queue_occupancy
 	do
 		if [[ $prev_t_ack -gt $t_enqueue ]]; then 
@@ -411,20 +336,20 @@ madwifi_plot_queue_occupancy_vs_queueing_delay_for_all_clients()
 	local plots_title=$3
 	for c in $CLIENTS
 	do
-		local host="client$c"
-		local madwifi_dumpfile=$workdir/$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
+		local client="client$c"
 		local plot_file="$plots_dir/time.$duration.madwifi.queue.vs.rawrtt.png"
-		local plot_prefix="$plots_filename_head.$host$MADWIFI_TIMING_DUMPFILE_SUFFIX.queue.delay.vs.queue.occupancy"
+		local plot_prefix="$plots_filename_head.$client$MADWIFI_TIMING_DUMPFILE_SUFFIX.queue.delay.vs.queue.occupancy"
 		local data_file="$plot_prefix.data"
 		local plot_file="$plot_prefix.png"
 
-		verbose "Generating madwifi queue occupancy vs queueing delay plot for $host"
-		madwifi_calculate_queue_occupancy_vs_queueing_delay $madwifi_dumpfile > $data_file
+		verbose "Generating madwifi queue occupancy vs queueing delay plot for $client"
+		madwifi_calculate_queue_occupancy_vs_queueing_delay $client $workdir > $data_file
 		gnuplot <<- EOF > $plot_file
 			set term png size $MADWIFI_PNG_SIZE
-			set title "Madwifi queue delays vs queue occupancy for $host\n$plot_title"
+			set title "Madwifi queue delays vs queue occupancy\nfor $client\n$plot_title"
 			set xlabel 'queue occupancy'
 			set ylabel 'queue delay (ms)'
+			set yrange [0:]
 			set xtics 5
 			set mxtics 5
 			set pointsize 0.2
@@ -433,3 +358,112 @@ madwifi_plot_queue_occupancy_vs_queueing_delay_for_all_clients()
 			EOF
 	done
 }
+
+madwifi_generate_filtered_kmsg_file()
+{
+	local client=$1
+	local workdir=$2
+	local client_kmsg_file=$workdir/$client$REMOTE_KMSG_FILE_SUFFIX
+	local filtered_kmsg_file=$client_kmsg_file$MADWIFI_FILTERED_KMSG_SUFFIX
+	if [[ ! -f $filtered_kmsg_file ]]; then
+		verbose "Generating madwifi filtered kmgs file for $client" 
+		madwifi_filter_kmsg $client_kmsg_file > $filtered_kmsg_file
+	fi
+	echo $filtered_kmsg_file
+}
+
+madwifi_generate_queue_in_time_data()
+{
+	local client=$1
+	local workdir=$2
+	local client_kmsg_file=$workdir/$client$REMOTE_KMSG_FILE_SUFFIX
+	local filtered_kmsg_file=$(madwifi_generate_filtered_kmsg_file $client $workdir)
+	cat $filtered_kmsg_file | cut -f "$MADWIFI_COL_ENQUEUE $MADWIFI_COL_QUEUE_OCCUPANCY" --output-delimiter=" "
+}
+
+# this will calculate the queue occupancy 
+# it will assign +1 for enqueue time and -1 for ack time. 
+madwifi_generate_calculated_queue_in_time_data()
+{
+	local client=$1
+	local workdir=$2
+	local client_kmsg_file=$workdir/$client$REMOTE_KMSG_FILE_SUFFIX
+	local t_enqueue= 
+	local t_ack= 
+	local ts_not_sorted=$(create_temp_file)
+	local ts_sorted=$(create_temp_file)
+	local filtered_kmsg_file=$(madwifi_generate_filtered_kmsg_file $client $workdir)
+	cat $filtered_kmsg_file | cut -f "$MADWIFI_COL_ENQUEUE $MADWIFI_COL_ACK" \
+	| while read t_enqueue t_ack
+	do
+		echo -e "$t_enqueue ++\n$t_ack --" >> $ts_not_sorted
+	done 
+	sort -n $ts_not_sorted > $ts_sorted
+	local ts=
+	local inc_or_dec=
+	local queue=0
+	cat $ts_sorted | cut -f "1 2" | while read ts inc_or_dec 
+	do
+		echo $ts $((queue$inc_or_dec))
+	done
+	release_temp_file ts_sorted
+	release_temp_file ts_not_sorted
+}
+
+madwifi_normalize_timestamps()
+{
+	local file=$1
+	local first_timestamp=$(head -1 $file | cut -d ' ' -f 1)
+	local tmpfile=$(create_temp_file)
+	cp $file $tmpfile
+	verbose "Normalizing timestamps"
+	cat $tmpfile | awk --assign ts="$first_timestamp" '{CONVFMT = "%.6f"} {print ($1-ts)/1000000 " " $2}' > $file
+	release_temp_file $tmpfile
+}
+
+madwifi_plot_queue_in_time_for_all_clients()
+{
+	local workdir=$1
+	local plots_filename_head=$2
+	local plots_title=$3
+	for c in $CLIENTS
+	do
+		local client="client$c"
+		local plot_file="$plots_dir/time.$duration.madwifi.queue.in.time.png"
+		local plot_prefix="$plots_filename_head.$client$MADWIFI_TIMING_DUMPFILE_SUFFIX.queue.in.time"
+		local data_file="$plot_prefix.data"
+		local plot_file="$plot_prefix.png"
+
+		verbose "Generating madwifi queue in time plot for $client"
+		madwifi_generate_queue_in_time_data $client $workdir > $data_file
+		madwifi_normalize_timestamps $data_file
+		echo -e "\n\n" >> $data_file
+		local tempfile=$(create_temp_file)
+		madwifi_generate_calculated_queue_in_time_data $client $workdir > $tempfile
+		madwifi_normalize_timestamps $tempfile
+		cat $tempfile >> $data_file
+		release_temp_file $tempfile
+		local max_queue_size=$(sort -n -k 2 $data_file  | tail -1 | cut -d ' ' -f 2)
+		((max_queue_size++))
+		gnuplot <<- EOF > $plot_file
+			set term png size $MADWIFI_PNG_VERTICAL_DOUBLE_SIZE
+			set xlabel 'Time (usec)'
+			set format x "%.0f"
+			set ylabel 'Queue Occupancy'
+			set yrange [0:$max_queue_size]
+			set multiplot
+
+			set title "Madwifi queue in time\nfor $client\n$plot_title"
+			set ylabel 'Packets'
+			set origin 0.0,0.0
+			set size 1.0,0.50
+			plot "$data_file" index 0 using 1:2 with lines lt 3 title '' axis x1y1
+
+			set title "Madwifi calculated queue in time\nfor $client\n$plot_title"
+			set origin 0.0,0.5
+			set size 1.0,0.50
+			plot "$data_file" index 1 using 1:2 with lines lt 3 title '' axis x1y1
+			EOF
+	done
+}
+

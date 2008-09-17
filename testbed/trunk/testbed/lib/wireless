@@ -65,7 +65,6 @@ wireless_802_11x_generate_get_commands()
 			echo -n "iwpriv $interface get_txoplimit $queue $flag ; "
 		done
 	done
-	echo -n "true"
 }
 
 wireless_802_11x_generate_set_commands()
@@ -88,7 +87,6 @@ wireless_802_11x_generate_set_commands()
 			echo -n "iwpriv $interface txoplimit $queue $flag $WIRELESS_802_11x_TXOP ; "
 		done
 	done
-	echo -n "echo 802.11b flags are set"
 }
 
 wireless_802_11x_set_network()
@@ -110,9 +108,16 @@ wireless_802_11x_set_network()
 			;;
 	esac
 	if [[ -z $set_network_flag ]]; then
+		local get_command=$(wireless_802_11x_generate_get_commands ath0 $mode $slottime $fixedrate)
+		remote_run_command_on_client root ap "$get_command"
+		remote_run_command_on_all_clients root  "$get_command"
+
 		local set_command=$(wireless_802_11x_generate_set_commands ath0 $mode $slottime $fixedrate)
 		remote_run_command_on_client root ap "$set_command"
 		remote_run_command_on_all_clients root  "$set_command"
+
+		remote_run_command_on_client root ap "$get_command"
+		remote_run_command_on_all_clients root  "$get_command"
 	fi
 }
 

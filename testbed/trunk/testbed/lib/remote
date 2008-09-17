@@ -2,6 +2,8 @@
 
 # Globals
 CLIENT_NAME_PREFIX="client"
+REMOTE_KMSG_TMP_FILE=/tmp/kmsg
+REMOTE_KMSG_FILE_SUFFIX=.kmsg
 
 remote_run_command_on_client()
 {
@@ -63,6 +65,62 @@ remote_run_command_on_all_clients()
 	wait_for_pids $pids
 }
 
+remote_start_kmsg_logging()
+{
+	local host=$1
+	verbose "Log kernel messages on $host"
+	remote_run_command_on_client root $host "cat /proc/kmsg > /dev/null  & pid=\$! && sleep 1 && kill \$pid && cat /proc/kmsg > $REMOTE_KMSG_TMP_FILE" &
+}
+
+remote_stop_kmsg_logging()
+{
+	local host=$1
+	verbose "Stop kernel messages logging on $host"
+	remote_run_command_on_client root $host "kill \$(ps fax | grep '/proc/kmsg'  | sed 's/^ //' | cut -d ' ' -f 1)"
+}
+
+remote_start_kmsg_logging_on_all_clients()
+{
+	local pids=
+	for c in $CLIENTS
+	do 
+		remote_start_kmsg_logging "client$c" &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+}
+
+remote_stop_kmsg_logging_on_all_clients()
+{
+	local pids=
+	for c in $CLIENTS
+	do 
+		remote_stop_kmsg_logging "client$c" &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+}
+
+remote_copy_kmsg_file_from_all_clients()
+{
+	local destdir=$1
+	local pids=
+	for c in $CLIENTS
+	do 
+		local dst_file="$REMOTE_KMSG_TMP_FILE $destdir/client$c$REMOTE_KMSG_FILE_SUFFIX"
+		remote_copy_file_from_host root "client$c" $dst_file &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+	pids=
+	for c in $CLIENTS
+	do 
+		remote_delete_file_on_host "client$c" $REMOTE_KMSG_TMP_FILE &
+		pids="$pids $!"
+	done
+	wait_for_pids $pids
+}
+
 remote_network_interface_reset()
 {
 	local host=$1
@@ -85,4 +143,3 @@ remote_network_interface_reset_for_all_clients()
 	done
 	wait_for_pids $pids
 }
-
