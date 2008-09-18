@@ -124,18 +124,18 @@ start_logging()
 {
 	tcpdump_start_logging ap ath0 $IPERF_PORT
 	tcpdump_start_logging src eth0 $IPERF_PORT
-	remote_start_kmsg_logging_on_all_clients
+	io_do_for_all_wireless_hosts remote_start_kmsg_logging
 }
 
 end_logging()
 {
+	local dir=$1
 	for srv in ap src
 	do
 		tcpdump_stop_logging $srv
 		tcpdump_move_dumpfile $srv $dir
 	done
-	remote_stop_kmsg_logging_on_all_clients
-	remote_copy_kmsg_file_from_all_clients $dir
+	io_do_for_all_wireless_hosts remote_stop_kmsg_logging $dir
 }
 
 run_single_test()
@@ -160,7 +160,7 @@ run_single_test()
 		first_run=1
 	done
 	wait_for_pids $pids
-	end_logging
+	end_logging $dir
 }
 
 iterate_time_and_bandwidth()
@@ -271,11 +271,11 @@ generate_plots()
 
 set_wireless()
 {
-	remote_network_interface_reset_for_all_clients ath0
-	wireless_atheros_set_no_accel_to_network
-	wireless_set_all_clients_minimum_txpower
+	io_do_for_all_wireless_hosts remote_network_interface_reset ath0
+	io_do_for_all_wireless_hosts wireless_set_minimum_txpower 
+	io_do_for_all_wireless_hosts wireless_set_atheros_no_acceleration
 	wireless_802_11x_set_network $WIRELESS_802_11x_MODE
-	wireless_set_channel_to_network ath0 $WIRELESS_CHANNEL
+	io_do_for_all_wireless_hosts wireless_set_channel ath0 $WIRELESS_CHANNEL
 }
 
 main()

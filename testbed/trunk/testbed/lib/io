@@ -179,3 +179,28 @@ io_sum_column_in_file()
 	echo $count
 }
 
+# lets you run a function for all clients. 
+# the first argument of the function should be the client name. 
+# you shuld provide the other input vars after the function name. 
+io_do_for_all_clients()
+{
+        local function_name=$1
+        shift
+        local function_input=$@
+	local pids=
+        for c in $CLIENTS
+        do
+                $function_name client$c $function_input &
+		pids="$pids $!"
+        done
+	wait_for_pids $pids
+}
+
+io_do_for_all_wireless_hosts()
+{
+        local function_name=$1
+        shift
+        local function_input=$@
+        $function_name ap $function_input
+	io_do_for_all_clients $function_name $function_input
+}

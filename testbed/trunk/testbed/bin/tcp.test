@@ -138,7 +138,7 @@ start_logging()
 	local madwifi_host=$2
 	local tcpdump_host=$3
 	tcp_start_tcpprobe_logging $tcpprobe_host $IPERF_TCP_PORT
-	madwifi_start_timing_logging $madwifi_host
+	remote_start_kmsg_loggin $madwifi_host
 	tcpdump_start_logging $tcpdump_host ath0 $IPERF_TCP_PORT
 }
 
@@ -150,8 +150,7 @@ stop_logging()
 	local dir=$4
 	tcp_stop_tcpprobe_logging $tcpprobe_host
 	tcp_save_tcpprobe_log_file $tcpprobe_host $dir
-	madwifi_stop_timing_logging $madwifi_host
-	madwifi_move_timing_dumpfile $madwifi_host $dir
+	remote_stop_kmsg_logging $madwifi_host
 	tcpdump_stop_logging $tcpdump_host
 	tcpdump_move_dumpfile $tcpdump_host $dir
 }
@@ -244,11 +243,12 @@ generate_tcp_flows()
 
 set_wireless()
 {
-	remote_network_interface_reset_for_all_clients ath0
-	wireless_atheros_set_no_accel_to_network
-	wireless_set_all_clients_minimum_txpower
+	io_do_for_all_wireless_hosts remote_network_interface_reset ath0
+	io_do_for_all_wireless_hosts wireless_set_minimum_txpower 
+	io_do_for_all_wireless_hosts wireless_set_atheros_no_acceleration
 	wireless_802_11x_set_network $WIRELESS_802_11x_MODE
-	wireless_set_channel_to_network ath0 $WIRELESS_CHANNEL
+	io_do_for_all_wireless_hosts wireless_set_wifi0_txqueue_length_to_minimum
+	io_do_for_all_wireless_hosts wireless_set_channel ath0 $WIRELESS_CHANNEL
 }
 
 generate_plots()
