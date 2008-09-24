@@ -36,13 +36,14 @@ MADWIFI_COL_TCP_ACK_SEQ=13
 madwifi_filter_kmsg()
 {
 	local file=$1 # gets kmsg file
-	local tempfile=$(create_temp_file)
 	verbose "Cleaning $file from kernel messages and $MADWIFI_TIMING_LINE_DESCRIPTOR"
-	cat $file \
-		| grep $MADWIFI_TIMING_LINE_DESCRIPTOR \
-		| cut -f 2- \
-		| grep -v "[a-Z]" \
-		| awk -F "$MADWIFI_TIMING_DUMPFILE_COL_SEPERATOR" "(\$$MADWIFI_COL_QUEUE == $MADWIFI_TIMING_FILETER_QUEUE) {print \$0}"
+	local queue_col=$((MADWIFI_COL_QUEUE+1)) # the column is plus one because we didn't filtered the $MADWIFI_TIMING_LINE_DESCRIPTOR
+	awk -F "$MADWIFI_TIMING_DUMPFILE_COL_SEPERATOR" \
+		"/$MADWIFI_TIMING_LINE_DESCRIPTOR/ && \$$queue_col == $MADWIFI_TIMING_FILETER_QUEUE {
+		for (i=2; i<=NF; i++)
+		printf(\"%s\\t\", \$i)
+		printf(\"\\n\") # CR at end of line
+	} " $file
 }
 
 # check that a column variabls in a file are distinct
@@ -365,10 +366,8 @@ madwifi_generate_filtered_kmsg_file()
 	local workdir=$2
 	local client_kmsg_file=$workdir/$client$REMOTE_KMSG_FILE_SUFFIX
 	local filtered_kmsg_file=$client_kmsg_file$MADWIFI_FILTERED_KMSG_SUFFIX
-	if [[ ! -f $filtered_kmsg_file ]]; then
-		verbose "Generating madwifi filtered kmgs file for $client" 
-		madwifi_filter_kmsg $client_kmsg_file > $filtered_kmsg_file
-	fi
+	verbose "Generating madwifi filtered kmgs file for $client" 
+	madwifi_filter_kmsg $client_kmsg_file > $filtered_kmsg_file
 	echo $filtered_kmsg_file
 }
 
