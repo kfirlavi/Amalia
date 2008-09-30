@@ -9,7 +9,8 @@ source $LIB_PATH/tcp
 
 # Globals
 IPERF_UDP_PORT=5001
-IPERF_TCP_PORT=5001
+IPERF_TCP_PORT=5002
+IPERF_PNG_SIZE="400,300"
 
 
 # need to delete this function when find a solution to the >&2
@@ -50,7 +51,7 @@ iperf_kill_process()
 	while [[ $running == 0 ]]; do
 		iperf_verbose "Killing iperf..."
 		verbose "killing iperf $protocol on $host"
-		ssh root@$host $kill_command
+		remote_run_command_on_client root $host "$kill_command"
 		iperf_check_if_iperf_running $host $protocol
 		running=$?
 	done
@@ -84,7 +85,7 @@ iperf_check_if_iperf_running()
 		udp) command="$command_prefix $IPERF_UDP_PORT $command_suffix" ;;
 		tcp) command="$command_prefix $IPERF_TCP_PORT $command_suffix" ;;
 	esac
-	ssh root@$host "$command" > /dev/null
+	remote_run_command_on_client root $host "$command" 2> /dev/null
 	local ret=$?
 	iperf_verbose_yes_no $ret
 	return $ret
@@ -102,7 +103,7 @@ iperf_check_if_it_listen()
 		tcp) command="$command --tcp" ;;
 	esac
 	command="$command | grep iperf"
-	ssh root@$host "$command" > /dev/null
+	remote_run_command_on_client root $host "$command" 2> /dev/null
 	local ret=$?
 	iperf_verbose_yes_no $ret
 	return $ret
@@ -118,7 +119,8 @@ iperf_run_udp_server()
 	local listen=$?
 	while [[ $listen > 0 ]]; do
 		iperf_verbose "Setup iperf on $dst"
-		ssh root@$dst "iperf --udp --server --port $IPERF_UDP_PORT --interval 1 --format m" 2>&1 > /dev/null &
+		local command="iperf --udp --server --port $IPERF_UDP_PORT --interval 1 --format m"
+		remote_run_command_on_client root $dst "$command" 2> /dev/null &
 		sleep 2
 		iperf_check_if_it_listen $dst udp
 		local listen=$?
@@ -147,7 +149,8 @@ run_iperf_client_once()
 	iperf_kill_process $src udp
 	verbose "Run iperf udp on $src -> $dst port=$IPERF_TCP_PORT with time=$time and bandwidth=$bandwidth"
 	iperf_verbose "Run iperf on $src -> $dst"
-	local ret=$(ssh root@$src "iperf --udp --port $IPERF_UDP_PORT --client $dst --time $time --bandwidth ${bandwidth}m")
+	local command="iperf --udp --port $IPERF_UDP_PORT --client $dst --time $time --bandwidth ${bandwidth}m"
+	local ret=$(remote_run_command_on_client root $src "$command")
 	iperf_verbose "$ret"
 	local loss=$(get_loss_from_iperf_client_output "$ret")
 	iperf_verbose "iperf $src -> $dst time:$time bandwidth:${bandwidth}m loss:$loss"
@@ -162,7 +165,8 @@ iperf_run_tcp_server()
 	local listen=$?
 	while [[ $listen > 0 ]]; do
 		iperf_verbose "Setup iperf TCP server on $dst"
-		ssh root@$dst "iperf --server --port $IPERF_TCP_PORT --window $TCP_WINDOW --interval 1 --format m"  2>&1 > /dev/null &
+		local command="iperf --server --port $IPERF_TCP_PORT --window $TCP_WINDOW --interval 1 --format m"
+		remote_run_command_on_client root $dst "$command"  2>&1 > /dev/null &
 		sleep 2
 		iperf_check_if_it_listen $dst tcp
 		local listen=$?
@@ -174,9 +178,87 @@ iperf_run_tcp_client_once()
 	local src=$1
 	local dst=$2
 	local time=$3
-	iperf_kill_process $src tcp $dst
+	local util_src=$(echo $src | sed 's/wclient/client/')
+	iperf_kill_process $util_src tcp $dst
 	verbose "Run iperf tcp on $src -> $dst port=$IPERF_TCP_PORT with time=$time and window=$TCP_WINDOW"
 	iperf_verbose "Run iperf TCP on $src -> $dst"
-	local ret=$(ssh root@$src "iperf --port $IPERF_TCP_PORT --window $TCP_WINDOW --client $dst --time $time")
+	local command="iperf --port $IPERF_TCP_PORT --window $TCP_WINDOW --client $dst --time $time"
+	local ret=$(remote_run_command_on_client root $util_src "$command")
 	iperf_verbose "$ret"
+}
+
+iperf_get_log_filename()
+{
+	local src=$1
+	local dst=$2
+	local dir=$3
+	local t=$4
+	local protocol=$5
+	local log=
+	[[ $protocol == udp ]] && \
+		log="$dir/UDP.flow.from.$src.to.$dst.for.time.$t"
+	[[ $protocol == tcp ]] && \
+		log="$dir/TCP.flow.from.$src.to.$dst.for.time.$t"
+	echo $log
+}
+
+iperf_plot_stats()
+{
+	local dst=$1
+	local dir=$2
+	local t=$3
+	local output_file_name=$4.stats
+	local title=$5
+	local datafile=$output_file_name.data
+	iperf_generate_stats_datafile $src $dst $dir $t > $datafile
+	local col_move=0.2 # will move by 0.2 the columen to the right or left, so two columns can be seen in the plot
+	gnuplot <<- EOF
+		set term png size 400,300
+		set output '$output_file_name.png'
+		set title "iperf stats\n$title"
+		set boxwidth 0.3
+		set xtics 1
+		set style fill solid 0.25 border
+		set xlabel 'client'
+		set xrange [0:]
+		set ylabel 'Total KBytes'
+		set yrange [0:]
+		set y2label 'Kbits/sec'
+		set y2range [0:]
+		set y2tics
+		set ytics nomirror
+		plot "$datafile" using (\$1-$col_move):2 with boxes title 'Total KBytes' axes x1y1, "$datafile" using (\$1+$col_move):3 with boxes title 'Kbits/sec' axes x1y2
+		EOF
+}
+
+iperf_generate_stats_datafile()
+{
+	local dst=$1
+	local dir=$2
+	local t=$3
+	for c in $CLIENTS
+	do
+		local log=$(iperf_get_log_filename wclient$c w$dst $dir $t tcp)
+		local line=$(grep 'bits' $log | grep -v "0.00")
+		if [[ -n $line ]]; then
+			local total=$(echo $line | cut -d ' ' -f 5-6)
+			local bit_per_sec=$(echo $line | cut -d ' ' -f 7-8)
+			total=$(iperf_convert_mb_to_kb "$total")
+			bit_per_sec=$(iperf_convert_mb_to_kb "$bit_per_sec")
+			echo "$c $total $bit_per_sec"
+		else
+			echo "$c 0 0"
+		fi
+	done
+}
+
+iperf_convert_mb_to_kb()
+{
+	local str=$1
+	local num=`echo $str | cut -d ' ' -f 1`
+	local scale=`echo $str | cut -d ' ' -f 2`
+	if [[ $scale == 'Mbits/sec' || $scale == 'MBytes' ]]; then 
+		num=$(echo "$num*1000" | bc)
+	fi
+	echo $num
 }
