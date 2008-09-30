@@ -23,7 +23,7 @@ BOLD_COLOR=$COLOR_LIGHT_BLUE
 
 IO_LOCK_FILE="/tmp/$(hostname).lock"
 
-get_log_date()
+io_get_log_date()
 {
 	date +"%Y.%m.%d %H:%M:%S"
 }
@@ -34,7 +34,7 @@ verbose()
 	local str=$1
 	local options=$2
 	if [[ -n $VERBOSE ]]; then
-		echo -en "$(get_log_date) ${VERBOSE_COLOR}verbose: $COLOR_NO_COLOR" >&2
+		echo -en "$(io_get_log_date) ${VERBOSE_COLOR}verbose: $COLOR_NO_COLOR" >&2
 		echo $options "$str" >&2
 	fi
 }
@@ -51,7 +51,7 @@ debug()
 	local str=$1
 	local options=$2
 	if [[ -n $DEBUG ]]; then
-		echo -en "$(get_log_date) ${DEBUG_COLOR}debug: $COLOR_NO_COLOR" >&2
+		echo -en "$(io_get_log_date) ${DEBUG_COLOR}debug: $COLOR_NO_COLOR" >&2
 		echo $options "$str" >&2
 	fi
 }
@@ -72,7 +72,7 @@ error()
 {
 	local str=$1
 	local options=$2
-	echo -en "${ERROR_COLOR}error: $COLOR_NO_COLOR" >&2
+	echo -en "$(io_get_log_date) ${ERROR_COLOR}error: $COLOR_NO_COLOR" >&2
 	echo $options "$str" >&2
 }
 
@@ -159,16 +159,11 @@ io_global_testbed_release_lock()
 	fi
 }
 
-io_get_date_and_time()
-{
-	date +%Y.%m.%d_%H.%M
-}
-
 io_backup_commad()
 {
 	local workdir=$1
 	create_directory $workdir
-	echo "$(io_get_date_and_time) $IO_COMMAND" >> $workdir/$IO_COMMAND_HISTORY_FILE
+	echo "$(io_get_log_date) $IO_COMMAND" >> $workdir/$IO_COMMAND_HISTORY_FILE
 }
 
 io_sum_column_in_file()
