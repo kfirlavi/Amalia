@@ -23,13 +23,18 @@ BOLD_COLOR=$COLOR_LIGHT_BLUE
 
 IO_LOCK_FILE="/tmp/$(hostname).lock"
 
+get_log_date()
+{
+	date +"%Y.%m.%d %H:%M:%S"
+}
+
 # gets string to output and optional options to echo (-n for example)
 verbose()
 {
 	local str=$1
 	local options=$2
 	if [[ -n $VERBOSE ]]; then
-		echo -en "${VERBOSE_COLOR}verbose: $COLOR_NO_COLOR" >&2
+		echo -en "$(get_log_date) ${VERBOSE_COLOR}verbose: $COLOR_NO_COLOR" >&2
 		echo $options "$str" >&2
 	fi
 }
@@ -46,7 +51,7 @@ debug()
 	local str=$1
 	local options=$2
 	if [[ -n $DEBUG ]]; then
-		echo -en "${DEBUG_COLOR}debug: $COLOR_NO_COLOR" >&2
+		echo -en "$(get_log_date) ${DEBUG_COLOR}debug: $COLOR_NO_COLOR" >&2
 		echo $options "$str" >&2
 	fi
 }
@@ -94,7 +99,7 @@ create_directory()
 	local dir=$1
 	mkdir -p $dir
 	if [[ -d $dir ]]; then
-		verbose "Directory $dir created"
+		debug "Directory $dir created"
 	else
 		error "Error: cann't create directory \"$dir\""
 		exit 1
@@ -196,6 +201,20 @@ io_do_for_all_clients()
 	wait_for_pids $pids
 }
 
+io_do_for_all_wclients()
+{
+        local function_name=$1
+        shift
+        local function_input=$@
+	local pids=
+        for c in $CLIENTS
+        do
+                $function_name wclient$c $function_input &
+		pids="$pids $!"
+        done
+	wait_for_pids $pids
+}
+
 io_do_for_all_wireless_hosts()
 {
         local function_name=$1
@@ -203,4 +222,21 @@ io_do_for_all_wireless_hosts()
         local function_input=$@
         $function_name ap $function_input
 	io_do_for_all_clients $function_name $function_input
+}
+
+io_do_for_all_hosts()
+{
+        local function_name=$1
+        shift
+        local function_input=$@
+        $function_name src $function_input
+	io_do_for_all_wireless_hosts $function_name $function_input
+}
+
+io_kill_pid()
+{
+	local pid=$1
+	if [[ -n $(ps -ef | awk '{print $2}' | egrep "^$pid\$") ]]; then
+		kill $pid
+	fi
 }
