@@ -4,23 +4,62 @@
 LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
+PLOTS_HORIZONTAL_SIZE=700
+PLOTS_GOLDEN_RATIO=1.61803399
+PLOTS_EPS_WHITE_BLACK_PLOT_SUFFIX=bw.eps
+PLOTS_EPS_COLOR_PLOT_SUFFIX=color.eps
+PLOTS_PLOT_DATAFILE_SUFFIX=data
 
 plots_generate_index_file()
 {
 	local dir=$1
 	local html=$dir/index.html
 	verbose "Generating $html"
-	echo "<html><body>" > $html
+	cat <<- EOF > $html
+		<html><body>
+		Click image to see its data file
+		<br />
+		EOF
 	for i in $(cd $dir && find -name '*png' | sort -n -t t -k 9,9n)
 	do
-		local datafile_name=$(echo $i| sed 's/\.png//g').data
-		if [[ -f $dir/$datafile_name ]]; then
-			debug "data file exist for plot $i, so we link to it"
-			echo "<a href='$datafile_name'><img align='center' src='$i' alt='' /></a>" >> $html
-		else
-			debug "$i don't have data file. Not creating link."
-			echo "<img align='center' src='$i' alt='' />" >> $html
-		fi
+		local filename_prefix=$(echo $i| sed 's/\.png//g')
+		cat <<- EOF >> $html
+			<div>
+			<a href='$filename_prefix.$PLOTS_PLOT_DATAFILE_SUFFIX'><img align=center src='$i' alt='$i' /></a>
+			<a href='$filename_prefix.$PLOTS_EPS_WHITE_BLACK_PLOT_SUFFIX'>Black White EPS</a>
+			<a href='$filename_prefix.$PLOTS_EPS_COLOR_PLOT_SUFFIX'>Color EPS</a>
+			</div>
+			EOF
 	done
 	echo "</html></body>" >> $html
+}
+
+plots_get_plot_size()
+{
+	local size=$1 # double_vertical double_horizontal none
+	local horiz=$PLOTS_HORIZONTAL_SIZE
+	local vert=$(echo $horiz/$PLOTS_GOLDEN_RATIO | bc)
+	case $size in 
+		double_horizontal)
+			horiz=$(echo $horiz*2 | bc)
+		;;
+		double_vertical)
+			vert=$(echo $vert*2 | bc)
+		;;
+	esac
+	echo "$horiz,$vert"
+}
+
+plots_replot_eps()
+{
+	local filename_prefix=$1
+	cat <<- EOF
+		set term postscript eps enhanced
+		set output "$filename_prefix.$PLOTS_EPS_WHITE_BLACK_PLOT_SUFFIX"
+		replot
+
+		set term postscript eps color enhanced
+		set output "$filename_prefix.$PLOTS_EPS_COLOR_PLOT_SUFFIX"
+		replot
+		EOF
 }

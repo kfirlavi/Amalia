@@ -217,9 +217,12 @@ generate_throughput_plot_for_each_client()
 	for c in $CLIENTS
 	do
 		verbose "Generating throughput plot for client$c titled '$title'"
-        	echo "set output '$output_file_name.client$c.png'" >> $plot_tmp_file
-		local col=$((c+1))
-	        echo "plot \"$data_file\" using 1:$col with lines title 'client$c'" >> $plot_tmp_file
+        	local filename_prefix="$output_file_name.client$c"
+		cat <<- EOF >> $plot_tmp_file
+			set output "$filename_prefix.png"
+	        	plot "$data_file" using 1:$((c+1)) with lines title 'client$c'
+			$(plots_replot_eps $filename_prefix)
+			EOF
 	done
         gnuplot < $plot_tmp_file
         release_temp_file $plot_tmp_file
@@ -228,22 +231,24 @@ generate_throughput_plot_for_each_client()
 generate_throughput_plot_clients_combined()
 {
         local data_file=$1
-        local output_file_name=$2
+        local filename_prefix=$2
         local title=$3
         local xlabel=$4
         local ylabel=$5
         local plot_tmp_file=`create_temp_file`
 	verbose "Generate tcpdump throughput plot for all clients combined"
 	common_plot_commands_for_throughput_plots "$title" "$xlabel" "$ylabel" > $plot_tmp_file
-        echo "set output '$output_file_name.png'" >> $plot_tmp_file
+        echo "set output '$filename_prefix.png'" >> $plot_tmp_file
 	echo -n "plot " >> $plot_tmp_file
 
 	local first_client=$(echo $CLIENTS | cut -d ' ' -f 1)
 	for c in $CLIENTS
 	do
-		[[ $c != $first_client ]] && echo -n ", " >> $plot_tmp_file
-		local col=$((c+1))
-	        echo -n "\"$data_file\" using 1:$col with lines title 'client$c'" >> $plot_tmp_file
+		cat <<- EOF >> $plot_tmp_file
+			$([[ $c != $first_client ]] && echo -n ", ")
+	        	"$data_file" using 1:$((c+1)) with lines title 'client$c'
+			$(plots_replot_eps $filename_prefix)
+			EOF
 	done
         gnuplot < $plot_tmp_file
         release_temp_file $plot_tmp_file
@@ -336,8 +341,10 @@ tcpdump_start_logging()
 tcpdump_stop_logging()
 {
 	local host=$1
-	verbose "kill tcpdump on $host"
+	local destdir=$2
+	verbose "Stop tcpdump on $host"
 	ssh root@$host "killall tcpdump"
+	tcpdump_move_dumpfile $host $destdir
 }
 
 tcpdump_move_dumpfile()

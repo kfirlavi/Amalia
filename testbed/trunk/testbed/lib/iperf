@@ -10,8 +10,6 @@ source $LIB_PATH/tcp
 # Globals
 IPERF_UDP_PORT=5001
 IPERF_TCP_PORT=5002
-IPERF_PNG_SIZE="400,300"
-
 
 # need to delete this function when find a solution to the >&2
 iperf_verbose()
@@ -207,14 +205,14 @@ iperf_plot_stats()
 	local dst=$1
 	local dir=$2
 	local t=$3
-	local output_file_name=$4.stats
+	local filename_prefix=$4.stats
 	local title=$5
-	local datafile=$output_file_name.data
+	local datafile=$filename_prefix.data
 	iperf_generate_stats_datafile $src $dst $dir $t > $datafile
 	local col_move=0.2 # will move by 0.2 the columen to the right or left, so two columns can be seen in the plot
 	gnuplot <<- EOF
-		set term png size 400,300
-		set output '$output_file_name.png'
+		set term png size $(plots_get_plot_size)
+		set output "$filename_prefix.png"
 		set title "iperf stats\n$title"
 		set boxwidth 0.3
 		set xtics 1
@@ -227,7 +225,10 @@ iperf_plot_stats()
 		set y2range [0:]
 		set y2tics
 		set ytics nomirror
-		plot "$datafile" using (\$1-$col_move):2 with boxes title 'Total KBytes' axes x1y1, "$datafile" using (\$1+$col_move):3 with boxes title 'Kbits/sec' axes x1y2
+		plot "$datafile" using (\$1-$col_move):2 with boxes title 'Total KBytes' axes x1y1, \
+			'' using (\$1+$col_move):3 with boxes title 'Kbits/sec' axes x1y2
+
+		$(plots_replot_eps $filename_prefix)
 		EOF
 }
 
@@ -236,6 +237,7 @@ iperf_generate_stats_datafile()
 	local dst=$1
 	local dir=$2
 	local t=$3
+	echo "# client_number total_kbytes_sent kbits_per_second"
 	for c in $CLIENTS
 	do
 		local log=$(iperf_get_log_filename wclient$c w$dst $dir $t tcp)

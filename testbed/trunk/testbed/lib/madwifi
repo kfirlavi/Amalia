@@ -13,9 +13,6 @@ MADWIFI_TIMING_DUMPFILE_COL_SEPERATOR="\t"
 MADWIFI_TIMING_UDP_PACKET_SIZE=1534 # this is for filtering 
 MADWIFI_TIMING_FILETER_QUEUE=2 # this is for filtering 
 MADWIFI_TIMING_LINE_DESCRIPTOR="MADWIFI_DELAY_TIMESTAMPS" 
-MADWIFI_PNG_SIZE="400,300"
-MADWIFI_PNG_DOUBLE_SIZE="800,300"
-MADWIFI_PNG_VERTICAL_DOUBLE_SIZE="400,600"
 MADWIFI_DELAY_MAX_SPIKES_GAP=640 # 32 slots * 20 usec
 MADWIFI_DELAY_MAX_SPIKES_GAP_DIAGRAM_PEDDING_START=100
 MADWIFI_DELAY_MAX_SPIKES_GAP_DIAGRAM_PEDDING_END=30 
@@ -36,14 +33,17 @@ MADWIFI_COL_TCP_ACK_SEQ=13
 madwifi_filter_kmsg()
 {
 	local file=$1 # gets kmsg file
-	verbose "Cleaning $file from kernel messages and $MADWIFI_TIMING_LINE_DESCRIPTOR"
+	local tempfile=$(create_temp_file)
+	debug "Cleaning $file from kernel messages and $MADWIFI_TIMING_LINE_DESCRIPTOR"
+	gzip -cd $file > $tempfile
 	local queue_col=$((MADWIFI_COL_QUEUE+1)) # the column is plus one because we didn't filtered the $MADWIFI_TIMING_LINE_DESCRIPTOR
 	awk -F "$MADWIFI_TIMING_DUMPFILE_COL_SEPERATOR" \
-		"/$MADWIFI_TIMING_LINE_DESCRIPTOR/ && \$$queue_col == $MADWIFI_TIMING_FILETER_QUEUE {
+		"\$1 ~ /$MADWIFI_TIMING_LINE_DESCRIPTOR/ && \$$queue_col == $MADWIFI_TIMING_FILETER_QUEUE {
 		for (i=2; i<=NF; i++)
 		printf(\"%s\\t\", \$i)
 		printf(\"\\n\") # CR at end of line
-	} " $file
+	} " $tempfile | awk "!/[a-Z]/ {print}"
+	release_temp_file $tempfile
 }
 
 # check that a column variabls in a file are distinct
@@ -173,7 +173,7 @@ madwifi_calculate_queue_occupancy_vs_queueing_delay()
 			#total_delay=$((t_ack-t_enqueue))
 			#queue_delay=$((total_delay-mac_delay))
 			# this is after reducing the 3 equations to 1
-			queue_delay=$(((prev_t_ack-t_enqueue)/1000))
+			queue_delay=$((prev_t_ack-t_enqueue))
 		else
 			# previous packet got ack before this packet 
 			# entered the queue
@@ -182,6 +182,53 @@ madwifi_calculate_queue_occupancy_vs_queueing_delay()
 		prev_t_ack=$t_ack
 		echo $queue_delay $queue_occupancy
 	done
+}
+
+madwifi_calculate_queue_drain_time_stats()
+{
+	local client=$1
+	local workdir=$2
+	local client_kmsg_file=$workdir/$client$REMOTE_KMSG_FILE_SUFFIX
+	local filtered_kmsg_file=$(madwifi_generate_filtered_kmsg_file $client $workdir)
+	local queue_at_enqueue_time_datafile=$(create_temp_file)
+	local queue_drain_time_datafile=$(create_temp_file)
+	local datafile=$(create_temp_file)
+	local tempfile=$(create_temp_file)
+	madwifi_generate_calculated_queue_in_time_data $client $workdir > $queue_at_enqueue_time_datafile
+
+	debug "Calculating queue drain times"
+	# psaudo algorithm for calculating the drain time for each packet:
+	# if(prev_ack_ts > packet_enqueue_time)
+	#	current packet was enqueued before 
+	#	previouse packet finished sending
+	#	this is how it should be done logicaly
+	#
+	#	mac_delay = t_ack - prev_t_ack (1)
+	#	total_delay = t_ack - t_enqueue (2)
+	#	queue_delay = total_delay - mac_delay (3)
+	#
+	# 	this is after reducing the (1,2,3) equations to 1
+	#	queue_delay = prev_t_ack - t_enqueue
+	# else	
+	#	queue_delay=0; 
+	# end if	
+	awk -F "$MADWIFI_TIMING_DUMPFILE_COL_SEPERATOR" \
+		"BEGIN {prev=0} 
+		{if (prev>\$1) 
+			queue_delay=prev-\$1; 
+		else 
+			queue_delay=0; 
+		prev=\$2; 
+		print \$1, queue_delay
+	} " $filtered_kmsg_file > $tempfile
+
+	debug "Generating queue stats"
+	$LIB_PATH/misc/queue_stats.pl $queue_at_enqueue_time_datafile $tempfile
+
+	release_temp_file $queue_at_enqueue_time
+	release_temp_file $queue_drain_time_datafile
+	release_temp_file $datafile
+	release_temp_file $tempfile
 }
 
 # find the 640 (32*20 usec) slots in delay file that have the most packets 
@@ -259,10 +306,11 @@ madwifi_generate_histogram_data_for_delay_frequency()
 madwifi_generate_delay_histogram_plot()
 {
 	local datafile=$1 # gets a clean madwifi timing dump file
-	local outfile_prefix=$2
+	local filename_prefix=$2
 	local plot_title=$3
-	gnuplot <<- EOF > $outfile_prefix.png
-		set term png size $MADWIFI_PNG_DOUBLE_SIZE
+	gnuplot <<- EOF
+		set term png size $(plots_get_plot_size double_horizontal)
+		set output "$filename_prefix.png"
 		set title "Delay slots $plot_title"
 		set xlabel 'Delay'
 		set y2tics 0, 1
@@ -285,6 +333,8 @@ madwifi_generate_delay_histogram_plot()
 		plot \
 			"$datafile" index 1 using 1:2 with linespoints title '' axis x1y1, \
 			"$datafile" index 1 using 1:3 with points title 'retries' axis x1y2
+
+		$(plots_replot_eps $filename_prefix)
 		EOF
 }
 
@@ -330,34 +380,74 @@ madwifi_generate_delay_histogram_plot_for_all_clients()
 	done
 }
 
-madwifi_plot_queue_occupancy_vs_queueing_delay_for_all_clients()
+madwifi_plot_queue_occupancy_vs_queueing_delay()
 {
-	local workdir=$1
-	local plots_filename_head=$2
-	local plots_title=$3
-	for c in $CLIENTS
-	do
-		local client="client$c"
-		local plot_file="$plots_dir/time.$duration.madwifi.queue.vs.rawrtt.png"
-		local plot_prefix="$plots_filename_head.$client$MADWIFI_TIMING_DUMPFILE_SUFFIX.queue.delay.vs.queue.occupancy"
-		local data_file="$plot_prefix.data"
-		local plot_file="$plot_prefix.png"
+	local client=$1
+	local workdir=$2
+	local plots_filename_head=$3
+	local plots_title=$4
+	local filename_prefix="$plots_filename_head.$client$MADWIFI_TIMING_DUMPFILE_SUFFIX.queue.delay.vs.queue.occupancy"
+	local data_file="$filename_prefix.data"
 
-		verbose "Generating madwifi queue occupancy vs queueing delay plot for $client"
-		madwifi_calculate_queue_occupancy_vs_queueing_delay $client $workdir > $data_file
-		gnuplot <<- EOF > $plot_file
-			set term png size $MADWIFI_PNG_SIZE
-			set title "Madwifi queue delays vs queue occupancy\nfor $client\n$plot_title"
-			set xlabel 'queue occupancy'
-			set ylabel 'queue delay (ms)'
-			set yrange [0:]
-			set xtics 5
-			set mxtics 5
-			set pointsize 0.2
-			# lt 3 is blue
-			plot "$data_file" using 2:1 with points lt 3 title ''
-			EOF
-	done
+	verbose "Generating madwifi queue occupancy vs queueing delay plot for $client"
+	#madwifi_calculate_queue_occupancy_vs_queueing_delay $client $workdir > $data_file
+	gnuplot <<- EOF
+		set term png size $(plots_get_plot_size)
+		set output "$filename_prefix.png"
+		set title "Madwifi queue delays vs queue occupancy\nfor $client\n$plot_title"
+		set xlabel 'queue occupancy'
+		set xrange [-1:$(($(cut -d ' ' -f 2 $data_file | grep -v '\#' | sort -n | tail -1)+1))]
+		set ylabel 'queue delay (us)'
+		set yrange [0:]
+		set xtics 5
+		set mxtics 5
+		set pointsize 0.2
+		# lt 3 is blue
+		plot "$data_file" using 2:1 with points lt 3 title ''
+
+		$(plots_replot_eps $filename_prefix)
+		EOF
+}
+
+madwifi_plot_queue_drain_time_stats()
+{
+	local client=$1
+	local workdir=$2
+	local plots_filename_head=$3
+	shift; shift; shift
+	local plot_title=$@
+	local filename_prefix="$plots_filename_head.$client$MADWIFI_TIMING_DUMPFILE_SUFFIX.queue.drain.time.stats"
+	local data_file="$filename_prefix.data"
+
+	verbose "Generating madwifi queue occupancy vs queueing delay plot for $client"
+	madwifi_calculate_queue_drain_time_stats $client $workdir > $data_file
+	gnuplot <<- EOF
+		set term png size $(plots_get_plot_size)
+		set output "$filename_prefix.png"
+		set title "$client\n$plot_title"
+
+		set xlabel 'Packets in queue'
+		set xrange [-1:$(($(cut -d ' ' -f 1 $data_file | grep -v '\#' | tail -1)+1))]
+		set xtics 5
+		set mxtics 5
+
+		set ylabel 'Drain time (us)'
+		set yrange [0:]
+		set ytics nomirror 
+
+		set y2label 'Number of observations'
+		set y2range [0:]
+		set y2tics        
+
+		set pointsize 0.5
+		# pt, lt: http://sparky.rice.edu/~hartigan/gnuplot.html
+
+		plot '$data_file' using 1:2:3:4:5 with candlesticks lt 3 title 'Drain time distribution' axis x1y1, \
+			'' using 1:6 with points pt 5 lt 4 title 'Mean drain time' axis x1y1, \
+			'' using 1:7 with points pt 7 lt 1 title 'Number of observations' axis x1y2
+
+		$(plots_replot_eps $filename_prefix)
+		EOF
 }
 
 madwifi_generate_filtered_kmsg_file()
@@ -366,7 +456,7 @@ madwifi_generate_filtered_kmsg_file()
 	local workdir=$2
 	local client_kmsg_file=$workdir/$client$REMOTE_KMSG_FILE_SUFFIX
 	local filtered_kmsg_file=$client_kmsg_file$MADWIFI_FILTERED_KMSG_SUFFIX
-	verbose "Generating madwifi filtered kmgs file for $client" 
+	debug "Generating madwifi filtered kmgs file for $client" 
 	madwifi_filter_kmsg $client_kmsg_file > $filtered_kmsg_file
 	echo $filtered_kmsg_file
 }
@@ -428,10 +518,8 @@ madwifi_plot_queue_in_time_for_all_clients()
 	for c in $CLIENTS
 	do
 		local client="client$c"
-		local plot_file="$plots_dir/time.$duration.madwifi.queue.in.time.png"
-		local plot_prefix="$plots_filename_head.$client$MADWIFI_TIMING_DUMPFILE_SUFFIX.queue.in.time"
-		local data_file="$plot_prefix.data"
-		local plot_file="$plot_prefix.png"
+		local filename_prefix="$plots_filename_head.$client$MADWIFI_TIMING_DUMPFILE_SUFFIX.queue.in.time"
+		local data_file="$filename_prefix.data"
 
 		verbose "Generating madwifi queue in time plot for $client"
 		madwifi_generate_queue_in_time_data $client $workdir > $data_file
@@ -442,14 +530,14 @@ madwifi_plot_queue_in_time_for_all_clients()
 		madwifi_normalize_timestamps $tempfile
 		cat $tempfile >> $data_file
 		release_temp_file $tempfile
-		local max_queue_size=$(sort -n -k 2 $data_file  | tail -1 | cut -d ' ' -f 2)
-		((max_queue_size++))
-		gnuplot <<- EOF > $plot_file
-			set term png size $MADWIFI_PNG_VERTICAL_DOUBLE_SIZE
+		local max_queue_size=$(($(sort -n -k 2 $data_file  | tail -1 | cut -d ' ' -f 2)+1))
+		gnuplot <<- EOF
+			set term png size $(plots_get_plot_size double_vertical)
+			set output "$filename_prefix.png"
 			set xlabel 'Time (usec)'
 			set format x "%.0f"
 			set ylabel 'Queue Occupancy'
-			set yrange [0:$max_queue_size]
+			set yrange [-1:$max_queue_size]
 			set multiplot
 
 			set title "Madwifi queue in time\nfor $client\n$plot_title"
@@ -462,6 +550,8 @@ madwifi_plot_queue_in_time_for_all_clients()
 			set origin 0.0,0.5
 			set size 1.0,0.50
 			plot "$data_file" index 1 using 1:2 with lines lt 3 title '' axis x1y1
+
+			$(plots_replot_eps $filename_prefix)
 			EOF
 	done
 }

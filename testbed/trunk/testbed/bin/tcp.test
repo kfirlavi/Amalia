@@ -26,8 +26,6 @@ DIR_FOR_PLOTS="plots"
 STATES_RELATIVE_DIR="states"
 UDP_CLIENTS=
 LINK_CAPASITY=40 # total mb the network can handle
-IPERF_UDP_PORT=5001
-IPERF_TCP_PORT=5002
 TCP_CLIENT=
 
 usage()
@@ -138,7 +136,7 @@ start_logging()
 	local madwifi_host=$2
 	local tcpdump_host=$3
 	tcp_start_tcpprobe_logging $tcpprobe_host $IPERF_TCP_PORT
-	remote_start_kmsg_loggin $madwifi_host
+	remote_start_kmsg_logging $madwifi_host
 	tcpdump_start_logging $tcpdump_host ath0 $IPERF_TCP_PORT
 }
 
@@ -151,8 +149,7 @@ stop_logging()
 	tcp_stop_tcpprobe_logging $tcpprobe_host
 	tcp_save_tcpprobe_log_file $tcpprobe_host $dir
 	remote_stop_kmsg_logging $madwifi_host
-	tcpdump_stop_logging $tcpdump_host
-	tcpdump_move_dumpfile $tcpdump_host $dir
+	tcpdump_stop_logging $tcpdump_host $dir
 }
 
 run_iperf_servers()
@@ -213,7 +210,7 @@ run_iperf_server_on_all_clients()
 	wait_for_pids $pids
 }
 
-run_tcp_flow_from_src_to_clients()
+run_tcp_flow_src_to_clients()
 {
 	local dir=$1
 	local pids=
@@ -221,14 +218,43 @@ run_tcp_flow_from_src_to_clients()
 	do 
 		local src="src"
 		local dst="wclient$c"
-		local log="$dir/TCP.flow.from.$src.to.$dst.for.time.$t"
+		local log=$(iperf_get_log_filename $src $dst $dir $t tcp)
 		iperf_run_tcp_client_once $src $dst $t 2>&1 >> $log &
 		pids="$pids $!"
 	done
 	wait_for_pids $pids
 }
 
-generate_tcp_flows()
+run_tcp_flow()
+{
+	local src=$1
+	local dst=$2
+	local dir=$3
+	local t=$4
+	local log=$(iperf_get_log_filename $src $dst $dir $t tcp)
+	iperf_run_tcp_client_once $src $dst $t 2>&1 >> $log
+}
+
+run_tcp_flow_from_clients_to_src()
+{
+	local t=$1
+	local dir=$(make_results_dir $t)
+	local iperf_server_pid=
+	io_do_for_all_hosts tcp_start_tcpprobe_logging $IPERF_TCP_PORT
+	io_do_for_all_wireless_hosts remote_start_kmsg_logging
+	tcpdump_start_logging src eth0 $IPERF_TCP_PORT
+	tcpdump_start_logging ap ath0 $IPERF_TCP_PORT
+
+	iperf_run_tcp_server src 2>&1 > /dev/null &
+	io_do_for_all_wclients run_tcp_flow wsrc $dir $t
+
+	tcpdump_stop_logging ap $dir
+	tcpdump_stop_logging src $dir
+	io_do_for_all_wireless_hosts remote_stop_kmsg_logging $dir
+	io_do_for_all_hosts tcp_stop_tcpprobe_logging $dir
+}
+
+generate_tcp_flows_from_src_to_clients()
 {
 	local t=$1
 	local dir=$(make_results_dir $t)
@@ -253,7 +279,7 @@ set_wireless()
 
 generate_plots()
 {
-	local tcpprobe_host=$1
+	local host=$1
 	local t=
 	local plots_dir=$TEST_OUTPUT_DIR/$DIR_FOR_PLOTS
 	create_directory $plots_dir
@@ -262,9 +288,21 @@ generate_plots()
 	do
 		verbose_bold "Working on plots with time $t"
 		local udp_flows=$(echo $UDP_CLIENTS | wc --words)
-		local description="time: $t sec\nTCP flow: $TCP_CLIENT -> src\n$udp_flows UDP flows: clients $(echo $UDP_CLIENTS | tr ' ' ',') -> src"
-		tcp_plot_srtt_vs_raw_rtt $t $tcpprobe_host $(get_results_dir $t) $plots_dir "$description"
-		tcp_plot_madwifi_queue_vs_rawrtt $t $tcpprobe_host $(get_results_dir $t) $plots_dir "$description"
+		if [[ $udp_flows -gt 0 ]]; then
+			local description="time: $t sec\nTCP flow: $TCP_CLIENT -> src\n$udp_flows UDP flows: clients $(echo $UDP_CLIENTS | tr ' ' ',') -> src"
+		else
+			local description="time: $t sec\nTCP flow: $CLIENTS -> src"
+		fi
+		local workdir=$(get_results_dir $t)
+		local file_name="iperf.time.$t"
+		local plot_file_name="$plots_dir/iperf.time.$t"
+		tcp_plot_srtt_vs_raw_rtt $t $host $workdir $plots_dir "$description"
+		tcp_plot_madwifi_queue_vs_rawrtt $t $host $workdir $plots_dir "$description"
+		#generate_tcpdump_plots "$workdir" "$plots_dir" "$file_name" "$description"
+		iperf_plot_stats src "$workdir" $t "$plot_file_name" "$description"
+		io_do_for_all_wireless_hosts madwifi_plot_queue_occupancy_vs_queueing_delay "$workdir" "$plot_file_name" "$description"
+		io_do_for_all_wireless_hosts madwifi_plot_queue_drain_time_stats "$workdir" "$plot_file_name" "$description"
+		#madwifi_plot_queue_in_time_for_all_clients "$workdir" "$plot_file_name" "$description"
 	done
 	plots_generate_index_file $plots_dir
 }
@@ -277,9 +315,13 @@ run_test()
 	do
 		verbose_bold "Running test for time $t"
 		if [[ -z $TCP_SOURCE ]]; then
-			generate_udp_background_flows $t
+			if [[ -n $UDP_CLIENTS ]]; then
+				generate_udp_background_flows $t
+			else
+				run_tcp_flow_from_clients_to_src $t
+			fi
 		else
-			generate_tcp_flows $t
+			generate_tcp_flows_from_src_to_clients $t
 		fi
 	done
 }
@@ -299,7 +341,11 @@ main()
 		if [[ -n $TCP_SOURCE ]]; then
 			generate_plots src
 		else
-			generate_plots $TCP_CLIENT
+			if [[ -n $UDP_CLIENTS ]]; then
+				generate_plots $TCP_CLIENT
+			else
+				generate_plots
+			fi
 		fi
 	fi
 }

@@ -44,8 +44,10 @@ tcp_start_tcpprobe_logging()
 tcp_stop_tcpprobe_logging()
 {
 	local host=$1
+	local dst_dir=$2
 	verbose "stop tcp_probe on $host"
 	remote_run_command_on_client root $host "ps -ef | grep $TCP_TCPPROBE_PROC_FILE | grep -v grep | awk '{print \$2}' | xargs kill"
+	tcp_save_tcpprobe_log_file $host $dst_dir
 }
 
 tcp_save_tcpprobe_log_file()
@@ -66,12 +68,15 @@ tcp_plot_srtt_vs_raw_rtt()
 	local plots_dir=$4
 	local description=$5
 	local probe_file=$workdir/$host$TCP_TCPPROBE_LOG_SUFFIX
-	local plot_file="$plots_dir/time.$duration.srtt.vs.rawrtt.png"
-	gnuplot <<- EOF > $plot_file
+	local filename_prefix="$plots_dir/time.$duration.srtt.vs.rawrtt.png"
+	gnuplot <<- EOF
 		set term png size $TCP_PNG_SIZE
+		set output "$filename_prefix.png"
 		set title "SRTT vs RTT\n$description"
 		plot "$probe_file" using 1:$TCP_TCPPROBE_COL_SRTT with lines title 'srtt', \
 		     "$probe_file" using 1:$TCP_TCPPROBE_COL_RAW_RTT with line title 'raw rtt'
+
+		$(plots_replot_eps $filename_prefix)
 		EOF
 }
 
@@ -84,7 +89,7 @@ tcp_generate_madwifi_queue_delays_vs_rawrtt()
 	local queue_delays_file=$(create_temp_file)
 	local rtt_file=$(create_temp_file)
 	local last_queue_delay=-1
-	madwifi_generate_queue_delays_vs_tcp_sequence $madwifi_file > $queue_delays_file
+	madwifi_generate_queue_delays_vs_tcp_sequence $madwifi_dumpfile > $queue_delays_file
 	cat $tcpprobe_dumpfile | cut -d ' ' -f "$TCP_TCPPROBE_COL_ACK_SEQ $TCP_TCPPROBE_COL_RAW_RTT" > $rtt_file
 	cat $rtt_file \
 	| while read tcp_seq raw_rtt
@@ -112,15 +117,18 @@ tcp_plot_madwifi_queue_vs_rawrtt()
 	local plots_dir=$4
 	local plot_description=$5
 	local probe_file=$workdir/$host$TCP_TCPPROBE_LOG_SUFFIX
-	local madwifi_file=$workdir/$host$MADWIFI_TIMING_DUMPFILE_SUFFIX
-	local plot_file="$plots_dir/time.$duration.$host.madwifi.queue.vs.rawrtt.png"
-	local plot_data_file=$(echo $plot_file | sed 's/\.png//g').data
-	tcp_generate_madwifi_queue_delays_vs_rawrtt $probe_file $madwifi_file > $plot_data_file
-	gnuplot <<- EOF > $plot_file
+	local filtered_kmsg_file=$(madwifi_generate_filtered_kmsg_file $host $workdir)
+	local filename_prefix="$plots_dir/time.$duration.$host.madwifi.queue.vs.rawrtt"
+	local data_file=$filename_prefix.data
+	tcp_generate_madwifi_queue_delays_vs_rawrtt $probe_file $filtered_kmsg_file > $data_file
+	gnuplot <<- EOF
 		set term png size $TCP_PNG_SIZE
+		set output "$filename_prefix.png"
 		set title "Madwifi queue delays vs raw RTT\n$plot_description"
 		set xlabel 'queue delay'
 		set ylabel 'raw rtt'
-		plot "$plot_data_file" using 1:2 with points
+		plot "$data_file" using 1:2 with points
+
+		$(plots_replot_eps $filename_prefix)
 		EOF
 }

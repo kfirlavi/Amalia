@@ -37,7 +37,7 @@ remote_copy_file_from_host()
 	local host=$2
 	local src=$3
 	local dst=$4
-	verbose "copying file $user@$host:$src to $dst"
+	debug "copying file $user@$host:$src to $dst"
 	scp $file $user@$host:$src $dst > /dev/null
 }
 
@@ -45,7 +45,7 @@ remote_delete_file_on_host()
 {
 	local host=$1
 	local file=$2
-	verbose "Deleting file $file from $host"
+	debug "Deleting file $file from $host"
 	ssh root@$host "rm -f $file" > /dev/null
 }
 
@@ -69,7 +69,7 @@ remote_start_kmsg_logging()
 {
 	local host=$1
 	verbose "Log kernel messages on $host"
-	remote_run_command_on_client root $host "cat /proc/kmsg > /dev/null  & pid=\$! && sleep 1 && kill \$pid && cat /proc/kmsg > $REMOTE_KMSG_TMP_FILE" &
+	remote_run_command_on_client root $host "cat /proc/kmsg > /dev/null  & pid=\$! && sleep 1 && kill \$pid && cat /proc/kmsg  | gzip -c > $REMOTE_KMSG_TMP_FILE" &
 }
 
 remote_stop_kmsg_logging()

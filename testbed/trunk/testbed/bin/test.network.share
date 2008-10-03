@@ -10,6 +10,7 @@ source $LIB_PATH/tcpdump
 source $LIB_PATH/wireless
 source $LIB_PATH/madwifi
 source $LIB_PATH/plots
+source $LIB_PATH/iperf
 
 # Globals
 END=
@@ -21,7 +22,6 @@ PLOTS= # default no plots
 NO_PLOTS= # Initial value will generate plots
 DIR_FOR_PLOTS="plots"
 STATES_RELATIVE_DIR="states"
-IPERF_PORT=5001
 
 usage()
 {
@@ -122,8 +122,8 @@ get_client_state()
 
 start_logging()
 {
-	tcpdump_start_logging ap ath0 $IPERF_PORT
-	tcpdump_start_logging src eth0 $IPERF_PORT
+	tcpdump_start_logging ap ath0 $IPERF_UDP_PORT
+	tcpdump_start_logging src eth0 $IPERF_UDP_PORT
 	io_do_for_all_wireless_hosts remote_start_kmsg_logging
 }
 

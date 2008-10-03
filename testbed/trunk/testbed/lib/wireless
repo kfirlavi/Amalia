@@ -4,9 +4,9 @@ source $LIB_PATH/io
 source $LIB_PATH/remote
 
 # Globals
-WIRELESS_CHANNEL=11
+WIRELESS_CHANNEL=1
 WIRELESS_ATHEROS_ABOLT=0
-WIRELESS_TXPOWER_MIN=0
+WIRELESS_TXPOWER_MIN=16
 WIRELESS_TXQUEUE_LENGTH_MIN=1
 
 #Default parameters are 
@@ -159,4 +159,12 @@ wireless_set_channel()
 	local channel=$3
 	verbose "Set $host wireless channel to $channel"
 	remote_run_command_on_client root $host "iwconfig $iface channel $channel"
+}
+
+wireless_reassociate()
+{
+	local host=$1
+	local iface=$2
+	verbose "Reassociate $host with ap"
+	remote_run_command_on_client root $host "iwpriv $iface doth_reassoc 1"
 }
