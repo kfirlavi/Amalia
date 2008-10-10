@@ -4,6 +4,19 @@
 #
 #
 
+IO_COMMAND="$0 $@"
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+source $LIB_PATH/opts
+source $LIB_PATH/tcpdump
+source $LIB_PATH/tcp
+source $LIB_PATH/iperf
+source $LIB_PATH/router
+source $LIB_PATH/plots
+
 function usage() {
     echo "Usage: $0 [Options] testspec"
     echo "Options are:"
@@ -14,7 +27,7 @@ function usage() {
 
 declare -a RATES RTTS QUEUES TCPS
 
-VERBOSE="off"
+VERBOSE=
 NETTEST_DIR=$PWD
 NETTEST_BIN=`dirname $0`
 NETTEST_CONFIG=config
@@ -73,9 +86,7 @@ function set_tcp() {
     for S in $1
     do
        local tcp=${tcplist[$s]-${tcplist[0]}}
-       if [[ $VERBOSE = "on" ]]; then
-           echo "set_tcp $S $tcp"
-       fi
+       verbose "set_tcp $S $tcp"
        if [[ $tcp != "DEFAULT" ]]; then
        	   ssh root@$S "modprobe tcp_$tcp 2>/dev/null; sysctl -w net.ipv4.tcp_congestion_control=$tcp >/dev/null"
        fi
@@ -91,9 +102,7 @@ function start_tcp_probe() {
     do
        local probe_out=$NETTEST_RESULT/${S}.probe
        PROBE_OUT=(${PROBE_OUT[@]} $probe_out)
-       if [[ $VERBOSE = "on" ]]; then
-           echo "Starting TCP probe on" $S "port $2, full $3"
-       fi
+       verbose "Starting TCP probe on" $S "port $2, full $3"
        ssh root@$S \
 	"rmmod tcp_probe 2>/dev/null ;  modprobe tcp_probe port=$2 full=$3; cat /proc/net/tcpprobe " >$probe_out &
     done
@@ -111,9 +120,7 @@ function stop_tcp_probe() {
 # Usage: start_tcpdump
 function start_tcpdump() {
 
-       if [[ $VERBOSE = "on" ]]; then
-           echo "Starting TCPDUMP on" $ROUTER
-       fi
+       verbose "Starting TCPDUMP on" $ROUTER
        ssh root@$ROUTER \
         "tcpdump -i em2 -w /tmp/tcpdump.dump" &
 	#"tcpdump -i em2 -S -n -tt port $PORT | /root/cwnd.sh > /tmp/tcpdump.cwnd"  &
@@ -183,10 +190,8 @@ do
 
 		for FILE in ${FILES[@]}
 		do 
-                    if [[ $VERBOSE = "on" ]]; then
-                        echo "RTT ${RTT}ms, ${RATE}Mbps, queue ${Q}xBDP, lossrate ${LOSSRATE}."
-		        echo "${NUMFLOWS} ${TCP} flows using $FILE"
-                    fi  
+                    verbose "RTT ${RTT}ms, ${RATE}Mbps, queue ${Q}xBDP, lossrate ${LOSSRATE}."
+		    verbose "${NUMFLOWS} ${TCP} flows using $FILE"
 
 		    # Now run the test ... 
 		    # - should this code be placed in its own script ?
@@ -234,9 +239,7 @@ do
 			sleep $STAGGER
 		    done
 
-		    if [[ $VERBOSE = "on" ]]; then
-			echo "Waiting for" $NUMFLOWS "flows:" ${TEST_PIDS[*]}
-		    fi
+		    verbose "Waiting for" $NUMFLOWS "flows:" ${TEST_PIDS[*]}
 		    # Wait for those flows
 		    wait ${TEST_PIDS[*]}
 		    TEST_PIDS=()
