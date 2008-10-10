@@ -145,6 +145,7 @@ fi
 
 gnuplot <<EOF
 set terminal $FORMAT  
+set pointsize 0.3
 set xlabel "time (s)"
 set ylabel "cwnd (packets)"
 set xrange [$XLO:$XHI]
