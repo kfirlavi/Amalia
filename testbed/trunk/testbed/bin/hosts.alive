@@ -48,15 +48,15 @@ get_opts()
 
 check_for_required_opts()
 {
-	check_clients_opts
+	opts_check_clients_opts
 }
 
 process_options()
 {
-	check_for_no_opts
+	opts_check_for_no_opts
 	get_opts $OPTS
 	check_for_required_opts
-	combine_clients_opts
+	opts_combine_clients_opts
 }
 
 ping_scan_on_host()

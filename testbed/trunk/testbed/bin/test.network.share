@@ -76,7 +76,7 @@ check_for_required_opts()
 		usage
 		exit 1
 	fi
-	check_clients_opts
+	opts_check_clients_opts
 	if [[ -n $(wireless_802_11x_check_mode $WIRELESS_802_11x_MODE) ]]
 	then
 		error "No wireless mode \"$WIRELESS_802_11x_MODE\""
@@ -86,11 +86,11 @@ check_for_required_opts()
 
 process_options()
 {
-	check_for_no_opts
+	opts_check_for_no_opts
 	get_opts $OPTS
 	check_for_required_opts
 	[[ -z $PLOTS ]] && check_directory $TEST_OUTPUT_DIR
-	combine_clients_opts
+	opts_combine_clients_opts
 }
 
 make_results_dir()

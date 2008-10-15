@@ -43,7 +43,7 @@ get_opts()
 	done
 }
 
-combine_clients_opts()
+opts_combine_clients_opts()
 {
 	if [[ -z $CLIENTS ]]; then
 		# we got -n, so we'll convert to $CLIENTS
@@ -54,7 +54,7 @@ combine_clients_opts()
 process_options()
 {
 	get_opts $OPTS
-	combine_clients_opts
+	opts_combine_clients_opts
 }
 
 # gets string to output and optional options to echo (-n for example)

@@ -1,20 +1,20 @@
 #!/bin/bash 
 
 # Globals
-OPTS="$@"
-START=1
+OPTS_OPTS="$@"
+OPTS_START=1
 
-check_for_no_opts()
+opts_check_for_no_opts()
 {
 	# exit if no arguments
-	if [[ -z $OPTS ]]
+	if [[ -z $OPTS_OPTS ]]
 	then 
 		usage
 		exit 1
 	fi
 }
 
-check_clients_opts()
+opts_check_clients_opts()
 {
 	# or clients list or end number of clients
 	if [[ -z $END && -z $CLIENTS ]]
@@ -26,11 +26,11 @@ check_clients_opts()
 	fi
 }
 
-combine_clients_opts()
+opts_combine_clients_opts()
 {
 	if [[ ! -z $END ]]; then
 		# we got -n, so we'll convert to $CLIENTS
-		CLIENTS=`seq -s ' ' $START $END`
+		CLIENTS=`seq -s ' ' $OPTS_START $END`
 	fi
 }
 

@@ -88,7 +88,7 @@ check_for_required_opts()
 	fi
 	if [[ -z $UDP_CLIENTS ]]
 	then
-		check_clients_opts
+		opts_check_clients_opts
 	else
 		if [[ -z $(opts_check_for_one_input $CLIENTS) ]]
 		then
@@ -108,11 +108,11 @@ check_for_required_opts()
 
 process_options()
 {
-	check_for_no_opts
+	opts_check_for_no_opts
 	get_opts $OPTS
 	check_for_required_opts
 	[[ -z $PLOTS ]] && check_directory $TEST_OUTPUT_DIR
-	combine_clients_opts
+	opts_combine_clients_opts
 }
 
 make_results_dir()
