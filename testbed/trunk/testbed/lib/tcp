@@ -11,6 +11,7 @@ source $LIB_PATH/madwifi
 TCP_CLIENT_PROBE_LOG_FILE=/tmp/tcpporbe
 TCP_TCPPROBE_PROC_FILE=/proc/net/tcpprobe
 TCP_TCPPROBE_LOG_SUFFIX=.tcpprobe
+TCP_TCPPROBE_DEFAULT_PARAM_FULL=1
 TCP_WINDOW="10m" # default 10 MB window
 #TCP_PNG_SIZE="400,300"
 TCP_PNG_SIZE="800,600"
@@ -35,10 +36,12 @@ tcp_start_tcpprobe_logging()
 {
 	local host=$1
 	local port=$2
+	local full=$TCP_TCPPROBE_DEFAULT_PARAM_FULL
+	[[ $3 -eq 0 ]] && full=0 # not the default value 
 	local dumpfile=$TCP_CLIENT_PROBE_LOG_FILE
 	verbose "Running tcp_probe on $host"
 	remote_load_kernel_module_on_client $host "tcp_probe port=$port full=1"
-	ssh root@$host "cat $TCP_TCPPROBE_PROC_FILE > $dumpfile" 2> /dev/null &
+	remote_run_command_on_client root $host "cat $TCP_TCPPROBE_PROC_FILE > $dumpfile" 2> /dev/null &
 }
 
 tcp_stop_tcpprobe_logging()
