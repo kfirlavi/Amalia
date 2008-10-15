@@ -35,7 +35,7 @@ madwifi_filter_kmsg()
 	local file=$1 # gets kmsg file
 	local tempfile=$(create_temp_file)
 	debug "Cleaning $file from kernel messages and $MADWIFI_TIMING_LINE_DESCRIPTOR"
-	gzip -cd $file > $tempfile
+	$IO_UNCOMPRESS_COMMAND $file > $tempfile
 	local queue_col=$((MADWIFI_COL_QUEUE+1)) # the column is plus one because we didn't filtered the $MADWIFI_TIMING_LINE_DESCRIPTOR
 	awk -F "$MADWIFI_TIMING_DUMPFILE_COL_SEPERATOR" \
 		"\$1 ~ /$MADWIFI_TIMING_LINE_DESCRIPTOR/ && \$$queue_col == $MADWIFI_TIMING_FILETER_QUEUE {

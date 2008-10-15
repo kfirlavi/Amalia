@@ -5,6 +5,8 @@ VERBOSE= # no verbos
 DEBUG= # no debug
 #IO_COMMAND= # needs to be defined at the start of the program like that IO_COMMAND="$0 $@"
 IO_COMMAND_HISTORY_FILE=command_history
+IO_COMPRESS_COMMAND="gzip -c"
+IO_UNCOMPRESS_COMMAND="gzip -cd"
 
 # Colors
 COLOR_LIGHT_BLUE="\033[1;34m"
