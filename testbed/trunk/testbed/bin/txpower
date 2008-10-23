@@ -1,10 +1,12 @@
 #!/bin/bash
+IO_COMMAND="$0 $@"
 
-OPTS=$@
-START_CLIENT=1
-END_CLIENT=16
-VERBOSE= # no verbos
-CLIENTS=
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+source $LIB_PATH/opts
+
 TXPOWER=
 
 usage()
@@ -53,7 +55,7 @@ opts_combine_clients_opts()
 
 process_options()
 {
-	get_opts $OPTS
+	get_opts $OPTS_ARGS
 	opts_combine_clients_opts
 }
 
