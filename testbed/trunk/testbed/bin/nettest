@@ -17,17 +17,8 @@ source $LIB_PATH/iperf
 source $LIB_PATH/router
 source $LIB_PATH/plots
 
-function usage() {
-    echo "Usage: $0 [Options] testspec"
-    echo "Options are:"
-    echo "	-c <file>	configuration file"
-    echo "	-d <directory>	network test directory"
-    echo "	-p		follow results with tcpprobe"
-}
-
+# Globals
 declare -a RATES RTTS QUEUES TCPS
-
-VERBOSE=
 NETTEST_DIR=$PWD
 NETTEST_BIN=`dirname $0`
 NETTEST_CONFIG=config
@@ -39,98 +30,116 @@ USEROUTER="yes"
 CONFIGCLIENT="yes"
 PORT=5001 # default port for tcpdump and iperf
 
-# Argument parsing for overrides
-while getopts "c:d:pv" flag
-do 
-  case $flag in
-      d) NETTEST_DIR=$OPTARG;;
-      c) NETTEST_CONFIG=$OPTARG;;
-      p) TCPPROBE="on";;
-      v) VERBOSE="on";;
-      *) usage;;
-  esac
-done
+usage() {
+	prog=$(basename $0)
+	cat <<- EOF
+		Usage: $prog [Options] -s <testspec file>
+		Options are:
+			-c <file>	configuration file
+			-d <directory>	network test directory
+			-p		follow results with tcpprobe
+			-s		spec file
+			-h		Show this message
+			-v 		verbose
+			-x		debug
+		EOF
+}
 
-# find remaining args
-args=(${@:$OPTIND})
-if [[ ${#args[*]} -ne 1 ]]; then
-    usage
-fi
+get_opts()
+{
+	while getopts "c:d:s:pvxh" options; do 
+		case $options in
+			c) NETTEST_CONFIG=$OPTARG;;
+			d) NETTEST_DIR=$OPTARG;;
+			s) TESTSPEC=$OPTARG;;
+			p) TCPPROBE="on";;
+			v) VERBOSE=1;;
+			x) DEBUG=1;;
+			h) usage
+			   exit;;
+			*) usage
+			   exit 1;;
+		esac
+	done
+}
 
-TESTSPEC=${args[0]}
+check_for_testspec()
+{
+	if [[ -z $TESTSPEC ]]; then
+		error "Option -s spec_file is required"
+		exit 1
+	else 
+		if [[ ! -f $TESTSPEC ]]; then
+			error "No such file: $TESTSPEC"
+			exit 1
+		fi
+	fi
+}
 
-if [[ ! -r $TESTSPEC ]]; then
-    echo "$TESTSPEC does not exist"
-    exit 1
-fi
+get_opts $OPTS_ARGS
+check_for_testspec
 
-# Read the server config
+verbose "Read the server config"
 . $NETTEST_DIR/$NETTEST_CONFIG
 
-# Read the test specfic settings
+verbose "Read the test specfic settings"
 . $TESTSPEC
 
-# Read the setup code for router
-. $NETTEST_BIN/router
-
-NETTEST_RESULT=$NETTEST_DIR/results/`basename $TESTSPEC`
+NETTEST_RESULT=$NETTEST_DIR/results/$(basename $TESTSPEC)
 mkdir -p $NETTEST_RESULT
 DATE=`date +%d%m%y-%R`
 OUTFILE=$NETTEST_RESULT/$DATE.csv
 APPLIST=(`echo $APPLICATIONS | sed 's/:/ /g'`);
 
 # Usage: set_tcp server(s) tcp(s)
-function set_tcp() { 
-    local tcplist=($2)
-    local s=0
-    for S in $1
-    do
-       local tcp=${tcplist[$s]-${tcplist[0]}}
-       verbose "set_tcp $S $tcp"
-       if [[ $tcp != "DEFAULT" ]]; then
-       	   ssh root@$S "modprobe tcp_$tcp 2>/dev/null; sysctl -w net.ipv4.tcp_congestion_control=$tcp >/dev/null"
-       fi
-       ((s++))
-    done
+set_tcp()
+{ 
+	local tcplist=($2)
+	local s=0
+	for S in $1
+	do
+		local tcp=${tcplist[$s]-${tcplist[0]}}
+		if [[ $tcp != "DEFAULT" ]]; then
+			tcp_change_ca_algorithm_on_client $tcp $S "tcp_$tcp"
+		fi
+		((s++))
+	done
 }
 
 # Usage: start_tcp_probe server(s) port 
-function start_tcp_probe() {
+start_tcp_probe() {
 
     PROBE_OUT=()
     for S in $1
     do
-       local probe_out=$NETTEST_RESULT/${S}.probe
+       local probe_out=$NETTEST_RESULT/${S}$TCP_TCPPROBE_LOG_SUFFIX
        PROBE_OUT=(${PROBE_OUT[@]} $probe_out)
-       verbose "Starting TCP probe on" $S "port $2, full $3"
-       ssh root@$S \
-	"rmmod tcp_probe 2>/dev/null ;  modprobe tcp_probe port=$2 full=$3; cat /proc/net/tcpprobe " >$probe_out &
+       tcp_start_tcpprobe_logging $S $2 $3
     done
 }
 
-function stop_tcp_probe() {
+stop_tcp_probe() {
    # killing the ssh process isn't enough to kill the processes on the server, so do this manually.
    for S in "$@" 
    do
-       PIDs=`ssh root@$S "ps -ef | grep -i cat./proc/net/tcpprobe | grep -v grep " | awk '{print $2," "}' | tr -d '\n'`
-       ssh root@$S "kill $PIDs 2>/dev/null"
+       tcp_stop_tcpprobe_logging $S $NETTEST_RESULT
    done
 }
 
 # Usage: start_tcpdump
-function start_tcpdump() {
+start_tcpdump() {
 
-       verbose "Starting TCPDUMP on" $ROUTER
-       ssh root@$ROUTER \
+       verbose "Starting TCPDUMP on $ROUTER"
+       remote_run_command_on_client root $ROUTER \
         "tcpdump -i em2 -w /tmp/tcpdump.dump" &
 	#"tcpdump -i em2 -S -n -tt port $PORT | /root/cwnd.sh > /tmp/tcpdump.cwnd"  &
 }
 
-function stop_tcpdump() {
+stop_tcpdump() {
    # killing the ssh process isn't enough to kill the processes on the server, so do this manually.
        DUMP_OUT=$NETTEST_RESULT/${ROUTER}.dump
-       ssh root@$ROUTER  "killall tcpdump 2>/dev/null"
-       ssh root@$ROUTER "tcpdump -r /tmp/tcpdump.dump -S -n -tt | /root/cwnd.sh > /tmp/tcpdump.cwnd"
+       remote_run_command_on_client root $ROUTER  "killall tcpdump 2>/dev/null"
+       remote_run_command_on_client root $ROUTER "tcpdump -r /tmp/tcpdump.dump -S -n -tt | /root/cwnd.sh > /tmp/tcpdump.cwnd"
        scp root@$ROUTER:/tmp/tcpdump.cwnd $NETTEST_RESULT/${ROUTER}.dump 
 }
 
@@ -156,170 +165,196 @@ echo >>$OUTFILE
 
 declare -a PROBE_PIDS PROBE_OUT TEST_PIDS 
 
-function cleanup() {
+cleanup() {
     kill  ${TEST_PIDS[*]} 2>/dev/null
     stop_tcp_probe ${SERVERS[@]}
     for APPLICATION in ${APPLIST[@]}
     do
         . $NETTEST_BIN/apps/$APPLICATION/cleanup
     done
+    for C in ${CLIENTS[*]}
+    do
+       remote_stop_ping_logging $C "$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-${FILE}-${f}.ping"
+    done
     rm -f ${PROBE_OUT[*]} ${TMP[*]}
     exit
 }
 trap cleanup HUP INT QUIT EXIT
 
-for RATE in ${RATES[@]}
-do
-    for RTT in ${RTTS[@]}
-    do
-        for LOSSRATE in ${LOSSRATES[@]-0}
-	do 
-
-	for Q in ${QUEUES[@]}
+iterate_rate_rtt_loss_queue()
+{
+	for RATE in ${RATES[@]}
 	do
-	    # Configure emulator/router
-	    if [ $USEROUTER="yes" ]; then
-	        # emulating network rather than using real path, so setup router
-	    	set-router $RTT $RATE $Q $LOSSRATE "${CLIENTS[*]}" 
+		for RTT in ${RTTS[@]}
+		do
+			for LOSSRATE in ${LOSSRATES[@]-0}
+			do 
+				for Q in ${QUEUES[@]}
+				do
+					run_experiment
+				done
+			done
+		done
+	done
+}
+
+run_experiment()
+{
+    # Configure emulator/router
+    if [ $USEROUTER="yes" ]; then
+	# emulating network rather than using real path, so setup router
+	router_set_dummynet $ROUTER $RTT $RATE $Q $LOSSRATE $NET1 $NET2
+    fi
+
+    for TCP in ${TCPS[@]}
+    do
+	TCPLIST=(`echo $TCP | sed 's/:/ /g'`);
+	set_tcp "${SERVERS[*]}" "${TCPLIST[*]}"
+
+	for FILE in ${FILES[@]}
+	do 
+	    verbose "RTT ${RTT}ms, ${RATE}Mbps, queue ${Q}xBDP, lossrate ${LOSSRATE}."
+	    verbose "${NUMFLOWS} ${TCP} flows using $FILE"
+
+	    # Now run the test ... 
+	    # - should this code be placed in its own script ?
+	    # - that would make running ns, bsd etc easier (just a change to the "run test" script).
+	    [[ $TCPPROBE = "on" ]] && start_tcp_probe "${SERVERS[*]}" $IPERF_TCP_PORT $FULLPROBE 
+	    [[ $TCPDUMP = "on" ]] && start_tcpdump  
+	    #[[ $TCPDUMP = "on" ]] && tcpdump_start_logging "${SERVERS[*]}" eth0 $IPERF_TCP_PORT
+
+	    if [[ $PING = "on" ]]; then
+	       f=0
+	       for C in ${CLIENTS[*]}
+	       do
+		   # seems to be bad to ping from server to client when server is a 
+		   # vista machine running cygwin - completely messes up iperf
+		   remote_start_ping_logging $C "192.168.0.6"
+		   ((f++))
+	       done
+	    fi  
+
+	    for APPLICATION in ${APPLIST[@]}
+	    do
+		    case $APPLICATION in
+			iperf) 
+				for C in ${CLIENTS[@]}
+				do
+					iperf_run_tcp_server $C &
+					sleep 5
+				done
+				;;
+			*) 
+				debug "running $NETTEST_BIN/apps/$APPLICATION/setup"
+				. $NETTEST_BIN/apps/$APPLICATION/setup;;
+		    esac
+	    done
+
+	    TEST_PIDS=()
+	    # Start N flows
+	    for ((f=0; f < $NUMFLOWS; f++))
+	    do 
+		debug "Flow No. $f"
+		# Round robin clients and servers
+		CLIENT=${CLIENTS[ $(($f % ${#CLIENTS[*]})) ]}
+		SERVER=${SERVERS[ $(($f % ${#SERVERS[*]})) ]}
+		DST=${CLIENT_IP[ $(($f % ${#CLIENT_IP[*]})) ]}
+		SRC=${SERVER_IP[ $(($f % ${#SERVER_IP[*]})) ]}
+
+		# Run test and put time in TMP[f]
+		APP=${APPLIST[$f]-${APPLIST[0]}}
+		if [[ $APP == "iperf" ]];then
+			iperf_run_tcp_client_once $SERVER $DST ${TIMES[0]} ${WINDOWS[0]} &
+		else
+			OPT=${OPTS[$f]-${OPTS[0]}}
+			/usr/bin/time -o ${TMP[$f]} -f %e \
+			    $NETTEST_BIN/apps/${APP}/run \
+				$TESTUSER $CLIENT $SERVER $DST $SRC $SRCDIR/$FILE \
+				$DSTDIR/${FILE}_${f} "$OPT" &
+		fi
+		TEST_PIDS[$f]=$!
+		sleep $STAGGER
+	    done
+
+	    verbose "Waiting for $NUMFLOWS flows: ${TEST_PIDS[*]}"
+	    # Wait for those flows
+	    wait ${TEST_PIDS[*]}
+	    TEST_PIDS=()
+
+	    if [[ $PING = "on" ]]; then
+	       for C in ${CLIENTS[*]}
+	       do
+		  remote_stop_ping_logging $C "$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-${FILE}-${f}.ping"
+	       done
 	    fi
 
-	    for TCP in ${TCPS[@]}
+	    # Stop tcpprobe
+	    [[ $TCPPROBE = "on" ]] && stop_tcp_probe ${SERVERS[@]}
+	    [[ $TCPDUMP = "on" ]] && stop_tcpdump 
+	    #[[ $TCPDUMP = "on" ]] && tcpdump_stop_logging $ROUTER $NETTEST_RESULT
+
+	    for APPLICATION in ${APPLIST[@]}
 	    do
-		TCPLIST=(`echo $TCP | sed 's/:/ /g'`);
-		set_tcp "${SERVERS[*]}" "${TCPLIST[*]}"
-
-		for FILE in ${FILES[@]}
-		do 
-                    verbose "RTT ${RTT}ms, ${RATE}Mbps, queue ${Q}xBDP, lossrate ${LOSSRATE}."
-		    verbose "${NUMFLOWS} ${TCP} flows using $FILE"
-
-		    # Now run the test ... 
-		    # - should this code be placed in its own script ?
-		    # - that would make running ns, bsd etc easier (just a change to the "run test" script).
- 		    if [[ $TCPPROBE = "on" ]]; then
-		        start_tcp_probe "${SERVERS[*]}" $PORT $FULLPROBE 
-		    fi
-                    if [[ $TCPDUMP = "on" ]]; then
-                        start_tcpdump  
-                    fi
-
-                    if [[ $PING = "on" ]]; then
-		       f=0
-                       for C in ${CLIENTS[*]}
-                       do
-                           # seems to be bad to ping from server to client when server is a vista machine running cygwin - completely messes up iperf
-                           ssh root@$C "ping -i 1 192.168.0.6 " > $NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-${FILE}-${f}.ping &
-			   ((f++))
-		       done
-                    fi  
-
-		    for APPLICATION in ${APPLIST[@]}
-		    do
- 			  . $NETTEST_BIN/apps/$APPLICATION/setup
-		    done
-
-		    TEST_PIDS=()
-		    # Start N flows
-		    for ((f=0; f < $NUMFLOWS; f++))
-		    do 
-			# Round robin clients and servers
-			CLIENT=${CLIENTS[ $(($f % ${#CLIENTS[*]})) ]}
-			SERVER=${SERVERS[ $(($f % ${#SERVERS[*]})) ]}
-			DST=${CLIENT_IP[ $(($f % ${#CLIENT_IP[*]})) ]}
-			SRC=${SERVER_IP[ $(($f % ${#SERVER_IP[*]})) ]}
-
-			# Run test and put time in TMP[f]
-			APP=${APPLIST[$f]-${APPLIST[0]}}
-			OPT=${OPTS[$f]-${OPTS[0]}}
-		        /usr/bin/time -o ${TMP[$f]} -f %e \
-			    $NETTEST_BIN/apps/${APP}/run \
-			    	$TESTUSER $CLIENT $SERVER $DST $SRC $SRCDIR/$FILE \
-				$DSTDIR/${FILE}_${f} "$OPT" &
-			TEST_PIDS[$f]=$!
-			sleep $STAGGER
-		    done
-
-		    verbose "Waiting for" $NUMFLOWS "flows:" ${TEST_PIDS[*]}
-		    # Wait for those flows
-		    wait ${TEST_PIDS[*]}
-		    TEST_PIDS=()
-
-		    if [[ $PING = "on" ]]; then
-		       echo "Stopping pings ..."
-		       for C in ${CLIENTS[*]}
-		       do
-		          ssh root@$C "killall ping"
-		       done
-		       echo "Done."
-		    fi
-
-		    # Stop tcpprobe
-  		    if [[ $TCPPROBE = "on" ]]; then
-    			stop_tcp_probe ${SERVERS[@]}
-                    fi
-                    if [[ $TCPDUMP = "on" ]]; then
-                        stop_tcpdump 
-                    fi
-  
-		    for APPLICATION in ${APPLIST[@]}
- 		    do
-   			. $NETTEST_BIN/apps/$APPLICATION/cleanup
-		    done
-
-                    # Generate output file
-                    echo -n "$RATE, $RTT, $Q, $TCP, $FILE" >>$OUTFILE
-                    for ((f=0; f < $NUMFLOWS; f++))
-                    do  
-                        # Be smarter about finding errors??
-                        read T < ${TMP[$f]}
-                        echo -n ","$T >>$OUTFILE
-                    done
-
-                    if [[ $TCPPROBE = "on" ]]; then
-			# Output optional metrics 
-                        for i in $( ls $NETTEST_BIN/metrics )
-		        do
-			   $NETTEST_BIN/metrics/$i "${PROBE_OUT[*]}" >>$OUTFILE
-   			done
-
-			# Concatenate all the probe output files with header
-			if [ $USEROUTER="yes" ]; then
-			     DESC="RTT ${RTT}ms, ${RATE}Mbps, queue ${Q}xBDP, lossrate ${LOSSRATE}."
-			fi
-			echo -e "# $COMMENT ${NUMFLOWS} ${TCP} flows. $APPLICATIONS." \
-		             "$DESC $FILE\n"\
-			     "# Application options: $OPTS"\
-			  | cat - ${PROBE_OUT[*]} | gzip \
-			    >$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-$FILE.probe.gz
-			rm -f ${PROBE_OUT[*]}
-			PROBE_OUT=()
-		    fi
-
-		    if [[ $TCPDUMP = "on" ]]; then
-		       # concatenate files
-                        echo -e "# $COMMENT ${NUMFLOWS} ${TCP} flows. $APPLICATIONS." \
-                        "$DESC $FILE\n"\
-                        "# Application options: $OPTS"\
-		        | cat - ${DUMP_OUT[*]} > $NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-$FILE.dump
- 		        rm -f ${DUMP_OUT[*]}
-		    fi
-		    if [[ ${APP} = "iperf" ]]; then
-		    #if [[ ${APP_OUT[*]} ]]; then
-		        echo "Postprocessing ..."
-			echo ${APP_OUT[*]}
-			$NETTEST_BIN/apps/${APP}/postprocess "${APP_OUT[*]}"
-                        echo -e "# $COMMENT ${NUMFLOWS} ${TCP} flows. $APPLICATIONS." \
-                             "$DESC $FILE\n"\
-                             "# Application options: $OPTS"\
-		        | cat - ${APP_OUT[*]} > $NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-$FILE.iprf
-	                #rm -f ${APP_OUT[*]}
-		    fi
-		    echo >>$OUTFILE
-		    rm -f ${TMP[*]}
-		    sleep 5
-		done
+		. $NETTEST_BIN/apps/$APPLICATION/cleanup
 	    done
-	done
+
+	    # Generate output file
+	    echo -n "$RATE, $RTT, $Q, $TCP, $FILE" >>$OUTFILE
+	    for ((f=0; f < $NUMFLOWS; f++))
+	    do  
+		# Be smarter about finding errors??
+		read T < ${TMP[$f]}
+		echo -n ","$T >>$OUTFILE
+	    done
+
+	    if [[ $TCPPROBE = "on" ]]; then
+		# Output optional metrics 
+		for i in $( ls $NETTEST_BIN/metrics )
+		do
+		   $NETTEST_BIN/metrics/$i "${PROBE_OUT[*]}" >>$OUTFILE
+		done
+
+		# Concatenate all the probe output files with header
+		if [ $USEROUTER="yes" ]; then
+		     DESC="RTT ${RTT}ms, ${RATE}Mbps, queue ${Q}xBDP, lossrate ${LOSSRATE}."
+		fi
+		output_filename=$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-$FILE.probe
+		header_comment="# $COMMENT ${NUMFLOWS} ${TCP} flows. $APPLICATIONS. $DESC $FILE\n# Application options: $OPTS"
+		echo -e $header_comment > $output_filename
+		$IO_UNCOMPRESS_COMMAND ${PROBE_OUT[*]} > $output_filename
+		$IO_COMPRESS_COMMAND $output_filename > $output_filename.gz
+		rm -f ${PROBE_OUT[*]}
+		PROBE_OUT=()
+	    fi
+
+	    if [[ $TCPDUMP = "on" ]]; then
+	       # concatenate files
+		echo -e "# $COMMENT ${NUMFLOWS} ${TCP} flows. $APPLICATIONS." \
+		"$DESC $FILE\n"\
+		"# Application options: $OPTS"\
+		| cat - ${DUMP_OUT[*]} > $NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-$FILE.dump
+		rm -f ${DUMP_OUT[*]}
+	    fi
+	    if [[ ${APP} = "iperf" ]]; then
+	    #if [[ ${APP_OUT[*]} ]]; then
+		verbose "Postprocessing ..."
+		echo ${APP_OUT[*]}
+		$NETTEST_BIN/apps/${APP}/postprocess "${APP_OUT[*]}"
+		echo -e "# $COMMENT ${NUMFLOWS} ${TCP} flows. $APPLICATIONS." \
+		     "$DESC $FILE\n"\
+		     "# Application options: $OPTS"\
+		| cat - ${APP_OUT[*]} > $NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-$FILE.iprf
+		#rm -f ${APP_OUT[*]}
+	    fi
+	    echo >>$OUTFILE
+	    rm -f ${TMP[*]}
+	    sleep 5
 	done
     done
-done
+}
+
+main()
+{
+	iterate_rate_rtt_loss_queue
+}
+main

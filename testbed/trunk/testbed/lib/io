@@ -7,6 +7,7 @@ DEBUG= # no debug
 IO_COMMAND_HISTORY_FILE=command_history
 IO_COMPRESS_COMMAND="gzip -c"
 IO_UNCOMPRESS_COMMAND="gzip -cd"
+IO_VERBOSE_ERROR_DEBUG_OUT=">&2"
 
 # Colors
 COLOR_LIGHT_BLUE="\033[1;34m"
@@ -22,6 +23,8 @@ VERBOSE_COLOR=$COLOR_YELLOW
 DEBUG_COLOR=$COLOR_LIGHT_GREEN
 ERROR_COLOR=$COLOR_LIGHT_RED
 BOLD_COLOR=$COLOR_LIGHT_BLUE
+YES_COLOR=$COLOR_LIGHT_CYAN
+NO_COLOR=$COLOR_LIGHT_PURPLE
 
 IO_LOCK_FILE="/tmp/$(hostname).lock"
 
@@ -120,14 +123,26 @@ check_directory()
 
 # gets number
 # if this number is zero, then it prints yes, else no
-verbose_yes_no()
+yes_no()
 {
 	local val=$1
 	if [[ $val == 0 ]]; then
-		verbose "[Yes]"
+		echo -e "[${YES_COLOR}Yes${COLOR_NO_COLOR}]" >&2
 	else
-		verbose "[No]"
+		echo -e "[${NO_COLOR}No${COLOR_NO_COLOR}]" >&2
 	fi
+}
+
+debug_yes_no()
+{
+	local val=$1
+	[[ -n $DEBUG ]] && yes_no $val
+}
+
+verbose_yes_no()
+{
+	local val=$1
+	[[ -n $VERBOSE ]] && yes_no $val
 }
 
 # gets a list of pids and wait on them until all are done

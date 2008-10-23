@@ -11,6 +11,7 @@ source $LIB_PATH/madwifi
 TCP_CLIENT_PROBE_LOG_FILE=/tmp/tcpporbe
 TCP_TCPPROBE_PROC_FILE=/proc/net/tcpprobe
 TCP_TCPPROBE_LOG_SUFFIX=.tcpprobe
+TCP_CONGESTION_CONTROL_PROC_FILE=/proc/sys/net/ipv4/tcp_congestion_control
 TCP_TCPPROBE_DEFAULT_PARAM_FULL=1
 TCP_WINDOW="10m" # default 10 MB window
 #TCP_PNG_SIZE="400,300"
@@ -27,9 +28,9 @@ tcp_change_ca_algorithm_on_client()
 	local algorithm=$1
 	local host=$2
 	local module="tcp_$algorithm"
-	verbose "loading $algorithm on $host"
+	verbose "loading congestion algorithm: $algorithm on $host"
 	[[ $algorithm -ne "reno" ]] && remote_load_kernel_module_on_client $host $module
-	remote_run_command_on_client root $host "echo $algorithm > /proc/sys/net/ipv4/tcp_congestion_control"
+	remote_run_command_on_client root $host "echo $algorithm > $TCP_CONGESTION_CONTROL_PROC_FILE"
 }
 
 tcp_start_tcpprobe_logging()
@@ -41,7 +42,7 @@ tcp_start_tcpprobe_logging()
 	local dumpfile=$TCP_CLIENT_PROBE_LOG_FILE
 	verbose "Running tcp_probe on $host"
 	remote_load_kernel_module_on_client $host "tcp_probe port=$port full=1"
-	remote_run_command_on_client root $host "cat $TCP_TCPPROBE_PROC_FILE > $dumpfile" 2> /dev/null &
+	remote_run_command_on_client root $host "cat $TCP_TCPPROBE_PROC_FILE | $IO_COMPRESS_COMMAND > $dumpfile" &
 }
 
 tcp_stop_tcpprobe_logging()
@@ -49,7 +50,7 @@ tcp_stop_tcpprobe_logging()
 	local host=$1
 	local dst_dir=$2
 	verbose "stop tcp_probe on $host"
-	remote_run_command_on_client root $host "ps -ef | grep $TCP_TCPPROBE_PROC_FILE | grep -v grep | awk '{print \$2}' | xargs kill"
+	remote_kill $host "$TCP_TCPPROBE_PROC_FILE"
 	tcp_save_tcpprobe_log_file $host $dst_dir
 }
 

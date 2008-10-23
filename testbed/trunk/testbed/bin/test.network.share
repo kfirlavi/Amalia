@@ -87,7 +87,7 @@ check_for_required_opts()
 process_options()
 {
 	opts_check_for_no_opts
-	get_opts $OPTS
+	get_opts $OPTS_ARGS
 	check_for_required_opts
 	[[ -z $PLOTS ]] && check_directory $TEST_OUTPUT_DIR
 	opts_combine_clients_opts

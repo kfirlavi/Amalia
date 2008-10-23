@@ -343,7 +343,7 @@ tcpdump_stop_logging()
 	local host=$1
 	local destdir=$2
 	verbose "Stop tcpdump on $host"
-	ssh root@$host "killall tcpdump"
+	remote_kill $host "tcpdump"
 	tcpdump_move_dumpfile $host $destdir
 }
 

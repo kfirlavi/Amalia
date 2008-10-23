@@ -20,12 +20,21 @@ remote_run_command_on_client()
 	ssh $user@$host "$command"
 }
 
+remote_remove_kernel_module_on_client()
+{
+	local host=$1
+	local module=$2
+	debug "removing kernel module '$module' on $host"
+	remote_run_command_on_client root $host "rmmod $module 2>&1 > /dev/null"
+}
+
 remote_load_kernel_module_on_client()
 {
 	local host=$1
 	local module=$2
-	verbose "loading '$module' on $host"
-	ssh root@$host "modprobe $module"
+	debug "loading '$module' on $host"
+	remote_remove_kernel_module_on_client $host $module
+	remote_run_command_on_client root $host "modprobe $module"
 }
 
 remote_copy_file_to_host()
@@ -84,7 +93,7 @@ remote_stop_kmsg_logging()
 	local destdir=$2
 	local dst_file="$REMOTE_KMSG_TMP_FILE $destdir/$host$REMOTE_KMSG_FILE_SUFFIX"
 	verbose "Stop kernel messages logging on $host"
-	remote_run_command_on_client root $host "kill \$(ps fax | grep '/proc/kmsg'  | sed 's/^ //' | cut -d ' ' -f 1)"
+	remote_kill $host "/proc/kmsg"
 	remote_copy_file_from_host root $host $dst_file
 	remote_delete_file_on_host $host $REMOTE_KMSG_TMP_FILE
 }
@@ -102,7 +111,7 @@ remote_stop_ping_logging()
 	local host=$1
 	local dst_file=$2
 	verbose "Stop ping logging on $host"
-	remote_run_command_on_client root $host "kill \$(ps fax | grep 'ping -i 1' | sed 's/^ //' | cut -d ' ' -f 1)"
+	remote_kill $host "ping -i 1"
 	remote_copy_file_from_host root $host $REMOTE_PING_TMP_FILE $dst_file
 	remote_delete_file_on_host $host $REMOTE_PING_TMP_FILE
 }
@@ -115,4 +124,12 @@ remote_network_interface_reset()
 	remote_run_command_on_client root $host "ifdown $iface" 2> /dev/null
 	remote_run_command_on_client root $host "ifup $iface" 2> /dev/null
 	sleep 1
+}
+
+remote_kill()
+{
+	local host=$1
+	local exp=$2 # expression for grep to identify the proccess to kill
+	debug "killing all '$exp' on $host"
+	remote_run_command_on_client root $host "kill \$(ps fax | grep '$exp' | awk '{print \$1}')" 2> /dev/null
 }

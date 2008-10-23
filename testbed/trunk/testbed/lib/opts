@@ -1,13 +1,13 @@
 #!/bin/bash 
 
 # Globals
-OPTS_OPTS="$@"
+OPTS_ARGS="$@"
 OPTS_START=1
 
 opts_check_for_no_opts()
 {
 	# exit if no arguments
-	if [[ -z $OPTS_OPTS ]]
+	if [[ -z $OPTS_ARGS ]]
 	then 
 		usage
 		exit 1
