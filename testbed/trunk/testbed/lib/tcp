@@ -41,8 +41,15 @@ tcp_start_tcpprobe_logging()
 	[[ $3 -eq 0 ]] && full=0 # not the default value 
 	local dumpfile=$TCP_CLIENT_PROBE_LOG_FILE
 	verbose "Running tcp_probe on $host"
+	tcp_kill_tcpprobe_remote_logging $host
 	remote_load_kernel_module_on_client $host "tcp_probe port=$port full=1"
 	remote_run_command_on_client root $host "cat $TCP_TCPPROBE_PROC_FILE | $IO_COMPRESS_COMMAND > $dumpfile" &
+}
+
+tcp_kill_tcpprobe_remote_logging()
+{
+	local host=$1
+	remote_kill $host "$TCP_TCPPROBE_PROC_FILE"
 }
 
 tcp_stop_tcpprobe_logging()
@@ -50,7 +57,7 @@ tcp_stop_tcpprobe_logging()
 	local host=$1
 	local dst_dir=$2
 	verbose "stop tcp_probe on $host"
-	remote_kill $host "$TCP_TCPPROBE_PROC_FILE"
+	tcp_kill_tcpprobe_remote_logging $host
 	tcp_save_tcpprobe_log_file $host $dst_dir
 }
 

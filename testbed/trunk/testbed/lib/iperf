@@ -110,7 +110,7 @@ iperf_run_udp_server()
 		remote_run_command_on_client root $dst "$command 2> /dev/null" &
 		sleep 2
 		iperf_check_if_it_listen $dst udp
-		local listen=$?
+		listen=$?
 	done
 }
 

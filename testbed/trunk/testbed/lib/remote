@@ -131,5 +131,5 @@ remote_kill()
 	local host=$1
 	local exp=$2 # expression for grep to identify the proccess to kill
 	debug "killing all '$exp' on $host"
-	remote_run_command_on_client root $host "kill \$(ps fax | grep '$exp' | awk '{print \$1}')" 2> /dev/null
+	remote_run_command_on_client root $host "kill \$(ps fax | grep '$exp' | awk '{print \$1}') 2> /dev/null"
 }

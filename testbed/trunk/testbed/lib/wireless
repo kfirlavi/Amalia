@@ -15,6 +15,8 @@ WIRELESS_TXQUEUE_LENGTH_MIN=1
 #AIFS 2 (==DIFS)
 #TXOP 0 (0 special == 1 packet, normally a time in usec)
 
+# ap needs priority for its ack. Look on the paper: http://www.hamilton.ie/net/tcp-measure_final.pdf
+WIRELESS_802_11x_AP_ACK_PRIORITY_CWMIN=2
 WIRELESS_802_11x_CWMIN=5
 WIRELESS_802_11x_CWMAX=10
 WIRELESS_802_11x_AIFS=2
@@ -60,10 +62,11 @@ wireless_802_11x_generate_get_commands()
 	do
 		for flag in 0 1
 		do
-			echo -n "iwpriv $interface get_cwmin $queue $flag ; "
-			echo -n "iwpriv $interface get_cwmax $queue $flag ; "
-			echo -n "iwpriv $interface get_aifs $queue $flag ; "
-			echo -n "iwpriv $interface get_txoplimit $queue $flag ; "
+			for c in cwmin cwmax aifs txoplimit
+			do
+				local command="iwpriv $interface get_$c $queue $flag"
+				echo -n "echo $command; $command;"
+			done
 		done
 	done
 }
@@ -74,6 +77,7 @@ wireless_802_11x_generate_set_commands()
 	local mode=$2
 	local slottime=$3
 	local fixedrate=$4
+	local host=$5
 
 	echo -n "iwpriv $interface mode $mode ; "
 	echo -n "sysctl dev.wifi0.slottime=$slottime ; "
@@ -82,7 +86,16 @@ wireless_802_11x_generate_set_commands()
 	do
 		for flag in 0 1
 		do
-			echo -n "iwpriv $interface cwmin $queue $flag $WIRELESS_802_11x_CWMIN ; "
+			# If host is the ap, then we give it different cwmin value for ack priority. 
+			local host_cwmin=
+			if [[ $flag -eq 0 ]]; then
+				# ap
+				host_cwmin=$WIRELESS_802_11x_AP_ACK_PRIORITY_CWMIN
+			else
+				# client
+				host_cwmin=$WIRELESS_802_11x_CWMIN
+			fi
+			echo -n "iwpriv $interface cwmin $queue $flag $host_cwmin ; "
 			echo -n "iwpriv $interface cwmax $queue $flag $WIRELESS_802_11x_CWMAX ; "
 			echo -n "iwpriv $interface aifs $queue $flag $WIRELESS_802_11x_AIFS ; "
 			echo -n "iwpriv $interface txoplimit $queue $flag $WIRELESS_802_11x_TXOP ; "
@@ -110,14 +123,13 @@ wireless_802_11x_set_network()
 	esac
 	if [[ -z $set_network_flag ]]; then
 		local get_command=$(wireless_802_11x_generate_get_commands ath0 $mode $slottime $fixedrate)
-		remote_run_command_on_client root ap "$get_command"
+		remote_run_command_on_client root ap "$get_command" 2>&1 > /tmp/wireless.settings.for.ap.$mode.$slottime.$fixedrate.before.log
 		remote_run_command_on_all_clients root  "$get_command"
 
-		local set_command=$(wireless_802_11x_generate_set_commands ath0 $mode $slottime $fixedrate)
-		remote_run_command_on_client root ap "$set_command"
-		remote_run_command_on_all_clients root  "$set_command"
+		remote_run_command_on_client root ap  "$(wireless_802_11x_generate_set_commands ath0 $mode $slottime $fixedrate ap)"
+		remote_run_command_on_all_clients root  "$(wireless_802_11x_generate_set_commands ath0 $mode $slottime $fixedrate)"
 
-		remote_run_command_on_client root ap "$get_command"
+		remote_run_command_on_client root ap "$get_command" 2>&1 > /tmp/wireless.settings.for.ap.$mode.$slottime.$fixedrate.after.log
 		remote_run_command_on_all_clients root  "$get_command"
 	fi
 }

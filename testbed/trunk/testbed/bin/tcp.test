@@ -154,8 +154,8 @@ stop_logging()
 
 run_iperf_servers()
 {
-	iperf_run_udp_server src 2>&1 > /dev/null &
-	iperf_run_tcp_server src 2>&1 > /dev/null &
+	iperf_run_udp_server src
+	iperf_run_tcp_server src
 }
 
 generate_udp_background_flows()
@@ -204,7 +204,7 @@ run_iperf_server_on_all_clients()
 		pids="$pids $!"
 		wireless_set_wifi0_txqueue_length_to_minimum $client &
 		pids="$pids $!"
-		iperf_run_tcp_server $client 2>&1 > /dev/null &
+		iperf_run_tcp_server $client
 		pids="$pids $!"
 	done
 	wait_for_pids $pids
@@ -245,7 +245,7 @@ run_tcp_flow_from_clients_to_src()
 	tcpdump_start_logging src eth0 $IPERF_TCP_PORT
 	tcpdump_start_logging ap ath0 $IPERF_TCP_PORT
 
-	iperf_run_tcp_server src 2>&1 > /dev/null &
+	iperf_run_tcp_server src
 	io_do_for_all_wclients run_tcp_flow wsrc $dir $t
 
 	tcpdump_stop_logging ap $dir
@@ -298,11 +298,11 @@ generate_plots()
 		local plot_file_name="$plots_dir/iperf.time.$t"
 		tcp_plot_srtt_vs_raw_rtt $t $host $workdir $plots_dir "$description"
 		tcp_plot_madwifi_queue_vs_rawrtt $t $host $workdir $plots_dir "$description"
-		#generate_tcpdump_plots "$workdir" "$plots_dir" "$file_name" "$description"
+		generate_tcpdump_plots "$workdir" "$plots_dir" "$file_name" "$description"
 		iperf_plot_stats src "$workdir" $t "$plot_file_name" "$description"
 		io_do_for_all_wireless_hosts madwifi_plot_queue_occupancy_vs_queueing_delay "$workdir" "$plot_file_name" "$description"
 		io_do_for_all_wireless_hosts madwifi_plot_queue_drain_time_stats "$workdir" "$plot_file_name" "$description"
-		#madwifi_plot_queue_in_time_for_all_clients "$workdir" "$plot_file_name" "$description"
+		madwifi_plot_queue_in_time_for_all_clients "$workdir" "$plot_file_name" "$description"
 	done
 	plots_generate_index_file $plots_dir
 }
