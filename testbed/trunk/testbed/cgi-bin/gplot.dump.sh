@@ -1,22 +1,29 @@
-#!/bin/bash -x
+#!/bin/bash
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+source $LIB_PATH/cgi
 
 # plot cwnd data reconstructed from tcpdump 
-tempf=$PATH_TRANSLATED
+input_file=$PATH_TRANSLATED
 
-f=`mktemp -t f.XXXXXX` || echo "can't create temp file"
-zcat $tempf > $f || cp $tempf $f
+tcpdump_file=$(create_temp_file)
+$IO_UNCOMPRESS_COMMAND $input_file > $tcpdump_file \
+	|| cp $input_file $tcpdump_file
 
-FORMAT=`echo "$QUERY_STRING" | sed -n 's/^.*format=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-STYLE2=`echo "$QUERY_STRING" | sed -n 's/^.*style2=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-PLOTNUM=`echo "$QUERY_STRING" | sed -n 's/^.*plot=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-TITLE=`echo "$QUERY_STRING" | sed -n 's/^.*title=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-XHI=`echo "$QUERY_STRING" | sed -n 's/^.*xhi=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-YHI=`echo "$QUERY_STRING" | sed -n 's/^.*yhi=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-XLO=`echo "$QUERY_STRING" | sed -n 's/^.*xlo=\([^&]*\).*$/\1/p' | sed "s/%20//g"`
-YLO=`echo "$QUERY_STRING" | sed -n 's/^.*ylo=\([^&]*\).*$/\1/p' | sed "s/%20//g"`
-STYLE=`echo "$QUERY_STRING" | sed -n 's/^.*style=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-SIZE=`echo "$QUERY_STRING" | sed -n 's/^.*size=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-NOTPUT=`echo "$QUERY_STRING" | sed -n 's/^.*tput=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
+FORMAT=$(cgi_query_string format $QUERY_STRING)
+STYLE2=$(cgi_query_string style2 $QUERY_STRING)
+PLOTNUM=$(cgi_query_string plot $QUERY_STRING)
+TITLE=$(cgi_query_string title $QUERY_STRING)
+XHI=$(cgi_query_string xhi $QUERY_STRING)
+YHI=$(cgi_query_string yhi $QUERY_STRING)
+XLO=$(cgi_query_string xlo $QUERY_STRING)
+YLO=$(cgi_query_string ylo $QUERY_STRING)
+STYLE=$(cgi_query_string style $QUERY_STRING)
+SIZE=$(cgi_query_string size $QUERY_STRING)
+NOTPUT=$(cgi_query_string tput $QUERY_STRING)
 
 if [[ $FORMAT = "eps" ]]; then
   FORMAT="postscript eps enhanced color"
@@ -41,9 +48,9 @@ echo Content-type: $MIME
 echo ""
 
 #start time
-starttime=`grep -v -i "#" $f | head -n 1 | cut -d ' ' -f 1`
+starttime=`grep -v -i "#" $tcpdump_file | head -n 1 | cut -d ' ' -f 1`
 #first get list of unique destination ip and ports
-flow_ids=` grep -v -i "#" $f | cut -d ' ' -f 2 | sort | uniq `
+flow_ids=` grep -v -i "#" $tcpdump_file | cut -d ' ' -f 2 | sort | uniq `
 
 #now sort output for gnuplot
 itemp=`mktemp -t i.XXXXXX` || echo "can't create temp file"
@@ -52,7 +59,7 @@ tput=`mktemp -t tput.XXXXX` || echo "can't create temp file"
 comma=''; plot='plot '; 
 j=0
 for i in $flow_ids; do
-   grep -i $i $f >> $temp
+   grep -i $i $tcpdump_file >> $temp
    echo -e '\n\n' >>$temp
    #plot="$plot $comma '$temp' index $j u (\$1-$starttime):(\$3/1448) with $STYLE title 'flow $j cwnd', '$itemp' index $j u 2:4 with $STYLE axes x1y2 title 'flow $j tput'"
    if [[ $NOTPUT ]]; then
@@ -64,11 +71,11 @@ for i in $flow_ids; do
    ((j++))
 done
 
-title1=`grep -i "#" $f | sed -n '1p' | sed -e 's/#//'`
-title2=`grep -i "#" $f | sed -n '2p' | sed -e 's/#//'`
+title1=`grep -i "#" $tcpdump_file | sed -n '1p' | sed -e 's/#//'`
+title2=`grep -i "#" $tcpdump_file | sed -n '2p' | sed -e 's/#//'`
 
 rtt=`mktemp -t rtt.XXXXX` || echo "can't create temp file"
-rttfile=`echo $tempf | sed -e 's/\.dump/-0\.ping/'`
+rttfile=`echo $input_file | sed -e 's/\.dump/-0\.ping/'`
 if [  -e $rttfile ]; then
         awk '/time=/ {split($0,pieces,"time="); split(pieces[2],pieces," "); print pieces[1]} ' $rttfile >$rtt
 	#sed -e '1d' | cut -f 7 -d ' ' | cut -f 2 -d '=' >$rtt
@@ -78,7 +85,7 @@ else
 fi
 
 iperf=`mktemp -t iperf.XXXXXX` || echo "can't create temp file"
-iperffile=`echo $tempf | sed -e 's/dump/iprf/'`
+iperffile=`echo $input_file | sed -e 's/dump/iprf/'`
 if [  -e $iperffile ]; then
 zcat $iperffile > $iperf || cp $iperffile $iperf
 #first get list of unique destination ip and ports
@@ -98,14 +105,31 @@ for i in $flow_ids; do
 done
 
 # get throughput from packet sequence numbers in tcpdump
-awk --non-decimal-data 'BEGIN {t=-1; dt=1; } {if (NF < 3) printf "\n\n"; else {seq=$4; if (t<0 || t>$1) {t=$1; lastseq=seq; print $1, 0}; if ($1-t >= dt) {print $1, (seq-lastseq)*8/1024/1024/($1-t); t=$1; lastseq=seq}; } } '  $temp > $tput
+awk --non-decimal-data \
+	'BEGIN {t=-1; dt=1; } {
+		if (NF < 3) 
+			printf "\n\n"; 
+		else {
+			seq=$4; 
+			if (t<0 || t>$1) {
+				t=$1; 
+				lastseq=seq; 
+				print $1, 0
+			}; 
+			if ($1-t >= dt) {
+				print $1, (seq-lastseq)*8/1024/1024/($1-t); 
+				t=$1; 
+				lastseq=seq
+			}; 
+		} 
+	}' $temp > $tput
 
 ititle1=`grep -i "#" $iperf | sed -n '1p' | sed -e 's/#//'`
 ititle2=`grep -i "#" $iperf | sed -n '2p' | sed -e 's/#//'`
 
 fi
-title1=`grep -i "#" $f | sed -n '1p' | sed -e 's/#//'`
-title2=`grep -i "#" $f | sed -n '2p' | sed -e 's/#//'`
+title1=`grep -i "#" $tcpdump_file | sed -n '1p' | sed -e 's/#//'`
+title2=`grep -i "#" $tcpdump_file | sed -n '2p' | sed -e 's/#//'`
 title3=$meantputs
 
 plott="plot [][0:1] 2"
@@ -143,47 +167,47 @@ if [[ $NOTPUT ]]; then
 	YAXIS=""
 fi
 
-gnuplot <<EOF
-set terminal $FORMAT  
-set pointsize 0.3
-set xlabel "time (s)"
-set ylabel "cwnd (packets)"
-set xrange [$XLO:$XHI]
-set yrange [$YLO:$YHI]
-#set y2label "throughput (Mbps)"
-#set ytics nomirror
-#set y2range [0:]
-#set y2tics
-$YAXIS
-$MSTART
-set title ""
+gnuplot <<- EOF
+	set terminal $FORMAT  
+	#set pointsize 0.3
+	set xlabel "time (s)"
+	set ylabel "cwnd (packets)"
+	set xrange [$XLO:$XHI]
+	set yrange [$YLO:$YHI]
+	#set y2label "throughput (Mbps)"
+	#set ytics nomirror
+	#set y2range [0:]
+	#set y2tics
+	$YAXIS
+	$MSTART
+	set title ""
 
-set size 1, 0.95
-set origin 0, 1 
-$preamble
-$plot
+	set size 1, 0.95
+	set origin 0, 1 
+	$preamble
+	$plot
 
-#set size 1,0.95
-set origin 1, 1
-set ylabel "throughput (${units}bps)"
-#set title "$ititle1 \n $ititle2"
-$iplot
+	#set size 1,0.95
+	set origin 1, 1
+	set ylabel "throughput (${units}bps)"
+	#set title "$ititle1 \n $ititle2"
+	$iplot
 
-#set size 1,0.95
-set origin 0, 0
-set ylabel 'ping time (ms)'
-$plotping
+	#set size 1,0.95
+	set origin 0, 0
+	set ylabel 'ping time (ms)'
+	$plotping
 
-set size 2,0
-set origin 0,2
-set title "$title1 $title2"
-unset border; unset key; unset xtics; unset ytics
-unset xlabel; unset ylabel
-#plot [][0:1] 2
-$plott
+	set size 2,0
+	set origin 0,2
+	set title "$title1 $title2"
+	unset border; unset key; unset xtics; unset ytics
+	unset xlabel; unset ylabel
+	#plot [][0:1] 2
+	$plott
 
-$MEND
+	$MEND
 EOF
 
-rm $f $temp $rtt $iperf $itemp
+rm $tcpdump_file $temp $rtt $iperf $itemp
 

@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+
+cgi_query_string()
+{
+	local pattern=$1
+	local query_string=$2
+	echo "$query_string" \
+		| sed -n "s/^.*$pattern=\([^&]*\).*$/\1/p" \
+		| sed "s/%20/ /g"
+}

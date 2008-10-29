@@ -1,17 +1,26 @@
-#!/bin/sh
+#!/bin/bash
 
-# plot tcp_probe data 
-tempf=$PATH_TRANSLATED
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
 
-f=`mktemp -t f.XXXXXX` || echo "can't create temp file"
-zcat $tempf > $f || cp $tempf $f
+source $LIB_PATH/io
+source $LIB_PATH/cgi
 
-FORMAT=`echo "$QUERY_STRING" | sed -n 's/^.*format=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-PLOTNUM=`echo "$QUERY_STRING" | sed -n 's/^.*plot=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-TITLE=`echo "$QUERY_STRING" | sed -n 's/^.*title=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-XHI=`echo "$QUERY_STRING" | sed -n 's/^.*xhi=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-STYLE=`echo "$QUERY_STRING" | sed -n 's/^.*style=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
-SIZE=`echo "$QUERY_STRING" | sed -n 's/^.*size=\([^&]*\).*$/\1/p' | sed "s/%20/ /g"`
+# plot cwnd data reconstructed from tcpdump 
+input_file=$PATH_TRANSLATED
+
+tcpdump_file=$(create_temp_file)
+$IO_UNCOMPRESS_COMMAND $input_file > $tcpdump_file \
+	|| cp $input_file $tcpdump_file
+
+
+FORMAT=$(cgi_query_string format $QUERY_STRING)
+PLOTNUM=$(cgi_query_string plot $QUERY_STRING)
+TITLE=$(cgi_query_string title $QUERY_STRING)
+XHI=$(cgi_query_string xhi $QUERY_STRING)
+STYLE=$(cgi_query_string style $QUERY_STRING)
+SIZE=$(cgi_query_string size $QUERY_STRING)
+
 if [[ $FORMAT = "eps" ]]; then
   FORMAT="postscript eps enhanced color"
   MIME="Application/PostScript"
@@ -31,7 +40,7 @@ echo Content-type: $MIME
 echo ""
 
 #first get list of unique destination ip and ports
-flow_ids=`grep -v -i "#" $f | grep -v ":22" | cut -d ' ' -f 2 | sort | uniq `
+flow_ids=`grep -v -i "#" $tcpdump_file | grep -v ":22" | cut -d ' ' -f 2 | sort | uniq `
 #now sort tcp_probe output for gnuplot
 temp=`mktemp -t probe.XXXXXX` || echo "can't create temp file"
 tput=`mktemp -t tput.XXXXX` || echo "can't create temp file"
@@ -40,17 +49,17 @@ comma=''; plot='plot '; plotrtt='plot '
 j=0
 meantputs=""
 for i in $flow_ids; do
-   grep -i $i $f >> $temp
+   grep -i $i $tcpdump_file >> $temp
    echo -e '\n\n' >>$temp
    plot="$plot $comma '$temp' index $j using 1:7 with lines title 'flow $j cwnd', '$tput' index $j using 1:2 with points axes x1y2 title 'flow $j tput'"
    plotrtt="$plotrtt $comma '$temp' index $j using 1:10 with lines title 'flow $j srtt', '$temp' index $j using 1:11 with points title 'flow $j rtt'"
    comma=","
-   meantputs=$meantputs`grep -i $i $f | awk --non-decimal-data 'BEGIN {t=-1; dt=1; sum=0; count=1;} {seq=$6; if (t<0) {t=$1; lastseq=seq;}; if ($1-t >= dt ) {tput=(seq-lastseq)*8/1024/1024/($1-t); if (tput>0 && t>200) {count=count+1;sum=sum+tput};  t=$1; lastseq=seq};  } END {printf "mean tput=%s Mbps ", sum/count; } ' ` 
+   meantputs=$meantputs`grep -i $i $tcpdump_file | awk --non-decimal-data 'BEGIN {t=-1; dt=1; sum=0; count=1;} {seq=$6; if (t<0) {t=$1; lastseq=seq;}; if ($1-t >= dt ) {tput=(seq-lastseq)*8/1024/1024/($1-t); if (tput>0 && t>200) {count=count+1;sum=sum+tput};  t=$1; lastseq=seq};  } END {printf "mean tput=%s Mbps ", sum/count; } ' ` 
 
    ((j++))
 done
 
-rttfile=`echo $tempf | sed -e 's/\.probe/\.ping/'`
+rttfile=`echo $input_file | sed -e 's/\.probe/\.ping/'`
 if [  -e $rttfile ]; then
 	cut -f 8 -d ' ' $rttfile | cut -f 2 -d '=' >$rtt
 	plotping="plot \"$rtt\" title \"ping time\" "
@@ -64,8 +73,8 @@ awk --non-decimal-data 'BEGIN {t=-1; dt=1; } {if (NF < 6) printf "\n\n"; else {s
 #meantputs=`awk --non-decimal-data 'BEGIN {t=-1; lastt=0; i=0; seq=0; lastseq=0;} {if (NF >= 6) {if (t<0 || t>$1) {t=$1; lastseq=$6;} else {lastt=$1; seq=$6}; } else {printf "flow %s: mean tput=%s Mbps",i,(seq-lastseq)*8/1024/1024/(lastt-t); i=i+1; t=-1;} } END {printf "flow %s: mean tput=%s Mbs",i,(seq-lastseq)*8/1024/1024/(lastt-t); i=i+1; } ' $temp`
 
 
-title1=`grep -i "#" $f | sed -n '1p' | sed -e 's/#//'`
-title2=`grep -i "#" $f | sed -n '2p' | sed -e 's/#//'`
+title1=`grep -i "#" $tcpdump_file | sed -n '1p' | sed -e 's/#//'`
+title2=`grep -i "#" $tcpdump_file | sed -n '2p' | sed -e 's/#//'`
 title3=$meantputs
 
 MSTART="set multiplot"
@@ -130,5 +139,5 @@ $MEND
 
 EOF
 
-rm -f $f $temp $tput $rttfile
+rm -f $tcpdump_file $temp $tput $rttfile
 
