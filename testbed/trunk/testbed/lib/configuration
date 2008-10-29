@@ -4,7 +4,6 @@
 LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
-source $LIB_PATH/remote
 
 # Globals
 CONFIGURATION_PROJECT_NAME=amalia
