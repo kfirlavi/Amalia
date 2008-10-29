@@ -9,9 +9,9 @@ source $LIB_PATH/cgi
 # plot cwnd data reconstructed from tcpdump 
 input_file=$PATH_TRANSLATED
 
-tcpdump_file=$(create_temp_file)
-$IO_UNCOMPRESS_COMMAND $input_file > $tcpdump_file \
-	|| cp $input_file $tcpdump_file
+probe_datafile=$(create_temp_file)
+$IO_UNCOMPRESS_COMMAND $input_file > $probe_datafile \
+	|| cp $input_file $probe_datafile
 
 
 FORMAT=$(cgi_query_string format $QUERY_STRING)
@@ -40,21 +40,21 @@ echo Content-type: $MIME
 echo ""
 
 #first get list of unique destination ip and ports
-flow_ids=`grep -v -i "#" $tcpdump_file | grep -v ":22" | cut -d ' ' -f 2 | sort | uniq `
+flow_ids=`grep -v -i "#" $probe_datafile | grep -v ":22" | cut -d ' ' -f 2 | sort | uniq `
 #now sort tcp_probe output for gnuplot
-temp=`mktemp -t probe.XXXXXX` || echo "can't create temp file"
-tput=`mktemp -t tput.XXXXX` || echo "can't create temp file"
-rtt=`mktemp -t rtt.XXXXX` || echo "can't create temp file" 
+temp=$(create_temp_file)
+tput=$(create_temp_file)
+rtt=$(create_temp_file)
 comma=''; plot='plot '; plotrtt='plot '
 j=0
 meantputs=""
 for i in $flow_ids; do
-   grep -i $i $tcpdump_file >> $temp
+   grep -i $i $probe_datafile >> $temp
    echo -e '\n\n' >>$temp
    plot="$plot $comma '$temp' index $j using 1:7 with lines title 'flow $j cwnd', '$tput' index $j using 1:2 with points axes x1y2 title 'flow $j tput'"
    plotrtt="$plotrtt $comma '$temp' index $j using 1:10 with lines title 'flow $j srtt', '$temp' index $j using 1:11 with points title 'flow $j rtt'"
    comma=","
-   meantputs=$meantputs`grep -i $i $tcpdump_file | awk --non-decimal-data 'BEGIN {t=-1; dt=1; sum=0; count=1;} {seq=$6; if (t<0) {t=$1; lastseq=seq;}; if ($1-t >= dt ) {tput=(seq-lastseq)*8/1024/1024/($1-t); if (tput>0 && t>200) {count=count+1;sum=sum+tput};  t=$1; lastseq=seq};  } END {printf "mean tput=%s Mbps ", sum/count; } ' ` 
+   meantputs=$meantputs`grep -i $i $probe_datafile | awk --non-decimal-data 'BEGIN {t=-1; dt=1; sum=0; count=1;} {seq=$6; if (t<0) {t=$1; lastseq=seq;}; if ($1-t >= dt ) {tput=(seq-lastseq)*8/1024/1024/($1-t); if (tput>0 && t>200) {count=count+1;sum=sum+tput};  t=$1; lastseq=seq};  } END {printf "mean tput=%s Mbps ", sum/count; } ' ` 
 
    ((j++))
 done
@@ -73,8 +73,8 @@ awk --non-decimal-data 'BEGIN {t=-1; dt=1; } {if (NF < 6) printf "\n\n"; else {s
 #meantputs=`awk --non-decimal-data 'BEGIN {t=-1; lastt=0; i=0; seq=0; lastseq=0;} {if (NF >= 6) {if (t<0 || t>$1) {t=$1; lastseq=$6;} else {lastt=$1; seq=$6}; } else {printf "flow %s: mean tput=%s Mbps",i,(seq-lastseq)*8/1024/1024/(lastt-t); i=i+1; t=-1;} } END {printf "flow %s: mean tput=%s Mbs",i,(seq-lastseq)*8/1024/1024/(lastt-t); i=i+1; } ' $temp`
 
 
-title1=`grep -i "#" $tcpdump_file | sed -n '1p' | sed -e 's/#//'`
-title2=`grep -i "#" $tcpdump_file | sed -n '2p' | sed -e 's/#//'`
+title1=`grep -i "#" $probe_datafile | sed -n '1p' | sed -e 's/#//'`
+title2=`grep -i "#" $probe_datafile | sed -n '2p' | sed -e 's/#//'`
 title3=$meantputs
 
 MSTART="set multiplot"
@@ -139,5 +139,8 @@ $MEND
 
 EOF
 
-rm -f $tcpdump_file $temp $tput $rttfile
+release_temp_file $probe_datafile
+release_temp_file $temp 
+release_temp_file $tput 
+release_temp_file $rttfile
 

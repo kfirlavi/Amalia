@@ -1,31 +1,38 @@
-#!/bin/sh
+#!/bin/bash
 
-# plot iperf data 
-tempf=$PATH_TRANSLATED
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
 
-f=`mktemp -t f.XXXXXX` || echo "can't create temp file"
-zcat $tempf > $f || cp $tempf $f
+source $LIB_PATH/io
+source $LIB_PATH/cgi
+
+# plot cwnd data reconstructed from tcpdump 
+input_file=$PATH_TRANSLATED
+
+iperf_datafile=$(create_temp_file)
+$IO_UNCOMPRESS_COMMAND $input_file > $iperf_datafile \
+	|| cp $input_file $iperf_datafile
 
 echo Content-type: image/png
 echo ""
 
 #first get list of unique destination ip and ports
-flow_ids=`grep -v -i "#" $f | cut -d ' ' -f 1 | sort | uniq `
+flow_ids=`grep -v -i "#" $iperf_datafile | cut -d ' ' -f 1 | sort | uniq `
 
 #now sort output for gnuplot
-temp=`mktemp -t probe.XXXXXX` || echo "can't create temp file"
+temp=$(create_temp_file)
 comma=''; plot='plot '; 
 j=0
 for i in $flow_ids; do
-   grep -i $i $f >> $temp
+   grep -i $i $iperf_datafile >> $temp
    echo -e '\n\n' >>$temp
    plot="$plot $comma '$temp' index $j using 2:4 with points title 'flow $j tput'"
    comma=","
    ((j++))
 done
 
-title1=`grep -i "#" $f | sed -n '1p' | sed -e 's/#//'`
-title2=`grep -i "#" $f | sed -n '2p' | sed -e 's/#//'`
+title1=`grep -i "#" $iperf_datafile | sed -n '1p' | sed -e 's/#//'`
+title2=`grep -i "#" $iperf_datafile | sed -n '2p' | sed -e 's/#//'`
 
 gnuplot <<EOF
 set xlabel "time (seconds)"
@@ -36,5 +43,5 @@ set terminal png
 $plot
 EOF
 
-rm $f $temp 
-
+release_temp_file $temp
+release_temp_file $iperf_datafile

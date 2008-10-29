@@ -2,11 +2,13 @@
 
 function print_error_page()
 {
-	echo Content-type: text/plain
-	echo ""
-	echo "Error: $1" 
-	echo "FILE_TYPE=$FILE_TYPE"
-	echo "PATH_TRANSLATED=$PATH_TRANSLATED"
+	cat <<- EOF
+		Content-type: text/plain
+		
+		Error: $1
+		FILE_TYPE=$FILE_TYPE
+		PATH_TRANSLATED=$PATH_TRANSLATED
+		EOF
 }
 
 function get_file_type()
