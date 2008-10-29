@@ -4,6 +4,7 @@
 LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
+source $LIB_PATH/configuration
 
 usage()
 {
@@ -167,6 +168,7 @@ write_pxe_default_file()
 
 main()
 {
+	configuration_load
 	io_global_testbed_lock
 	create_tftp_kernel_dir
 	kver=`get_kernel_version`

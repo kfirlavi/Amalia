@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+source $LIB_PATH/remote
+
+# Globals
+CONFIGURATION_PROJECT_NAME=amalia
+CONFIGURATION_FILENAME=$CONFIGURATION_PROJECT_NAME.conf
+CONFIGURATION_GLOBAL_DIR=/etc/$CONFIGURATION_PROJECT_NAME
+CONFIGURATION_USER_DIR=~/.$CONFIGURATION_PROJECT_NAME
+CONFIGURATION_GLOBAL_FILE=$CONFIGURATION_GLOBAL_DIR/$CONFIGURATION_FILENAME
+CONFIGURATION_USER_FILE=$CONFIGURATION_USER_DIR/$CONFIGURATION_FILENAME
+
+configuration_load_file()
+{
+	local file=$1
+	if [[ $(io_check_if_file_exsist $file) == yes ]]; then 
+		verbose "loading configuration file '$file'"
+		. $file
+	else
+		debug "configuration file '$file' does not exist. Not loading it."
+	fi
+}
+
+configuration_load()
+{
+	configuration_load_file $CONFIGURATION_GLOBAL_FILE
+	configuration_load_file $CONFIGURATION_USER_FILE
+}

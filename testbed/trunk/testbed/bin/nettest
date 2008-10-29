@@ -10,6 +10,7 @@ IO_COMMAND="$0 $@"
 LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
+source $LIB_PATH/configuration
 source $LIB_PATH/opts
 source $LIB_PATH/tcpdump
 source $LIB_PATH/tcp
@@ -355,6 +356,7 @@ run_experiment()
 
 main()
 {
+	configuration_load
 	iterate_rate_rtt_loss_queue
 }
 main

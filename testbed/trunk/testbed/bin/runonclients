@@ -4,6 +4,7 @@
 LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
+source $LIB_PATH/configuration
 source $LIB_PATH/opts
 source $LIB_PATH/remote
 
@@ -70,6 +71,7 @@ process_options()
 
 main()
 {
+	configuration_load
 	process_options
 	remote_run_command_on_all_clients "root" "$COMMAND"
 }

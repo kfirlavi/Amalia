@@ -4,6 +4,7 @@
 LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
+source $LIB_PATH/configuration
 source $LIB_PATH/opts
 source $LIB_PATH/iperf
 
@@ -98,6 +99,7 @@ find_max_bandwidth()
 
 main()
 {
+	configuration_load
 	process_options
 	# don't create dest iperf if -k is on
 	if [[ -z $DONT_LOAD_DST_SERVER ]]; then

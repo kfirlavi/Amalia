@@ -5,6 +5,7 @@ IO_COMMAND="$0 $@"
 LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
+source $LIB_PATH/configuration
 source $LIB_PATH/opts
 source $LIB_PATH/tcpdump
 source $LIB_PATH/wireless
@@ -328,6 +329,7 @@ run_test()
 
 main()
 {
+	configuration_load
 	process_options
 	io_backup_commad $TEST_OUTPUT_DIR
 	if [[ -z $PLOTS ]]; then

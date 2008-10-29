@@ -252,3 +252,11 @@ io_kill_pid()
 		kill $pid
 	fi
 }
+
+io_check_if_file_exsist()
+{
+	local file=$1
+	if [[ -N $file ]]; then
+		echo "yes"
+	fi
+}

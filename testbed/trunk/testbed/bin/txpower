@@ -5,6 +5,7 @@ IO_COMMAND="$0 $@"
 LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
+source $LIB_PATH/configuration
 source $LIB_PATH/opts
 
 TXPOWER=
@@ -111,6 +112,7 @@ set_txpower()
 
 main()
 {
+	configuration_load
 	process_options
 	if [[ -n $TXPOWER || -n $TXPOWER_DOWN_BY || -n $TXPOWER_UP_BY ]]; then
 		set_txpower

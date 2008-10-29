@@ -4,6 +4,7 @@
 LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
+source $LIB_PATH/configuration
 source $LIB_PATH/remote
 source $LIB_PATH/opts
 
@@ -175,6 +176,7 @@ ping_hosts()
 
 main()
 {
+	configuration_load
 	process_options
 	io_global_testbed_lock
 	ping_hosts
