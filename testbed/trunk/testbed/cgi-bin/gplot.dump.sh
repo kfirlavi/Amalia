@@ -5,6 +5,7 @@ LIB_PATH="$(dirname $0)/../lib"
 
 source $LIB_PATH/io
 source $LIB_PATH/cgi
+source $LIB_PATH/plots
 
 # plot cwnd data reconstructed from tcpdump 
 input_file=$PATH_TRANSLATED
@@ -30,13 +31,12 @@ if [[ $FORMAT = "eps" ]]; then
   MIME="Application/PostScript"
 fi
 if [[ $FORMAT = "" ]]; then
-  FORMAT="png"
-  case $SIZE in
-    normal) FORMAT="png size 1200,800";;
-    big) FORMAT="png size 2400,1600";;
-    huge) FORMAT="png size 3200,2400";;
-    *) FORMAT="png";;
-  esac
+	if [[ $SIZE -gt 0 ]]; then
+  		FORMAT="png size $(plots_get_zoom_plot_size $SIZE)"
+	else
+  		FORMAT="png size $(plots_get_plot_size)"
+	fi
+  	
   MIME="image/png"
 fi
 

@@ -34,11 +34,16 @@ plots_generate_index_file()
 	echo "</html></body>" >> $html
 }
 
+plots_get_plot_vertical_size()
+{
+	echo $PLOTS_HORIZONTAL_SIZE/$PLOTS_GOLDEN_RATIO | bc
+}
+
 plots_get_plot_size()
 {
-	local size=$1 # double_vertical double_horizontal none
+	local size=$1 # double_vertical double_horizontal double or none
 	local horiz=$PLOTS_HORIZONTAL_SIZE
-	local vert=$(echo $horiz/$PLOTS_GOLDEN_RATIO | bc)
+	local vert=$(plots_get_plot_vertical_size)
 	case $size in 
 		double_horizontal)
 			horiz=$(echo $horiz*2 | bc)
@@ -46,8 +51,20 @@ plots_get_plot_size()
 		double_vertical)
 			vert=$(echo $vert*2 | bc)
 		;;
+		double)
+			horiz=$(echo $horiz*2 | bc)
+			vert=$(echo $vert*2 | bc)
+		;;
 	esac
 	echo "$horiz,$vert"
+}
+
+plots_get_zoom_plot_size()
+{
+	local percentage=$1
+	local horiz=$PLOTS_HORIZONTAL_SIZE
+	local vert=$(plots_get_plot_vertical_size)
+	echo "$(echo "$horiz*$percentage/100" | bc),$(echo "$vert*$percentage/100" | bc)"
 }
 
 plots_replot_eps()
