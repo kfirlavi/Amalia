@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+source $LIB_PATH/plots
+source $LIB_PATH/remote
+
+# Globals
+PING_TIME_COL=7
+PING_REMOTE_LOGGING_FILE=/tmp/ping
+
+ping_generate_data_for_rtt_plot()
+{
+	local pingfile=$(io_uncompress_file $1)
+	# we get here just the time from the ping lines
+	awk "\$$PING_TIME_COL ~ /time=/ {
+		split(\$$PING_TIME_COL, t, \"=\"); 
+		print NR,t[2];
+	}" $pingfile
+	release_temp_file $pingfile
+}
+
+ping_plot_rtt_in_time()
+{
+	local pingfile=$1
+	local filename_prefix=$2
+	local plot_title=$3
+	local plot_data=$(create_temp_file)
+	ping_generate_data_for_rtt_plot $pingfile > $plot_data
+	gnuplot <<- EOF
+		set term png size $(plots_get_plot_size)
+		set output "$filename_prefix.png"
+		set title "Ping (RTT) time $plot_title"
+		set xlabel 'time (sec)'
+		set ylabel 'rtt (ms)'
+		plot "$plot_data" using 1:2
+
+		$(plots_replot_eps $filename_prefix)
+		EOF
+	release_temp_file $plot_data
+}
+
+ping_start_remote_logging()
+{
+	local src=$1
+	local dst=$2
+	verbose "Log ping times from $src to $dst"
+	remote_run_command_on_client root $src "ping -i 1 $dst | $IO_COMPRESS_COMMAND > $PING_REMOTE_LOGGING_FILE" &
+}
+
+ping_stop_remote_logging()
+{
+	local host=$1
+	local dst_file=$2
+	verbose "Stop ping logging on $host"
+	remote_kill $host "ping -i 1"
+	remote_copy_file_from_host root $host $PING_REMOTE_LOGGING_FILE $dst_file
+	remote_delete_file_on_host $host $PING_REMOTE_LOGGING_FILE
+}

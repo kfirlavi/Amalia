@@ -175,7 +175,7 @@ cleanup() {
     done
     for C in ${CLIENTS[*]}
     do
-       remote_stop_ping_logging $C "$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-${FILE}-${f}.ping"
+       ping_stop_remote_logging $C "$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-${FILE}-${f}.ping"
     done
     rm -f ${PROBE_OUT[*]} ${TMP[*]}
     exit
@@ -230,7 +230,7 @@ run_experiment()
 	       do
 		   # seems to be bad to ping from server to client when server is a 
 		   # vista machine running cygwin - completely messes up iperf
-		   remote_start_ping_logging $C "192.168.0.6"
+		   ping_start_remote_logging $C "192.168.0.6"
 		   ((f++))
 	       done
 	    fi  

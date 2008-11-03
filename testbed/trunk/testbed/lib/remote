@@ -8,7 +8,6 @@ source $LIB_PATH/io
 # Globals
 CLIENT_NAME_PREFIX="client"
 REMOTE_KMSG_TMP_FILE=/tmp/kmsg
-REMOTE_PING_TMP_FILE=/tmp/ping
 REMOTE_KMSG_FILE_SUFFIX=.kmsg
 
 remote_run_command_on_client()
@@ -96,24 +95,6 @@ remote_stop_kmsg_logging()
 	remote_kill $host "/proc/kmsg"
 	remote_copy_file_from_host root $host $dst_file
 	remote_delete_file_on_host $host $REMOTE_KMSG_TMP_FILE
-}
-
-remote_start_ping_logging()
-{
-	local src=$1
-	local dst=$2
-	verbose "Log ping times from $src to $dst"
-	remote_run_command_on_client root $src "ping -i 1 $dst | $IO_COMPRESS_COMMAND > $REMOTE_PING_TMP_FILE" &
-}
-
-remote_stop_ping_logging()
-{
-	local host=$1
-	local dst_file=$2
-	verbose "Stop ping logging on $host"
-	remote_kill $host "ping -i 1"
-	remote_copy_file_from_host root $host $REMOTE_PING_TMP_FILE $dst_file
-	remote_delete_file_on_host $host $REMOTE_PING_TMP_FILE
 }
 
 remote_network_interface_reset()
