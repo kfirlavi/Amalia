@@ -9,9 +9,8 @@ source $LIB_PATH/cgi
 # plot cwnd data reconstructed from tcpdump 
 input_file=$PATH_TRANSLATED
 
-iperf_datafile=$(create_temp_file)
-$IO_UNCOMPRESS_COMMAND $input_file > $iperf_datafile \
-	|| cp $input_file $iperf_datafile
+[  -e $input_file ] \
+	&& iperf_datafile=$(io_uncompress_file $input_file)
 
 echo Content-type: image/png
 echo ""

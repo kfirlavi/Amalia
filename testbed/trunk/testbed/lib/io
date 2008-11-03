@@ -96,7 +96,8 @@ create_temp_file()
 # gets temp file to delete
 release_temp_file()
 {
-	rm -f $1
+	local file=$1
+	[[ -e $file ]] && rm -f $file
 }
 
 create_directory()
@@ -259,4 +260,20 @@ io_check_if_file_exsist()
 	if [[ -N $file ]]; then
 		echo "yes"
 	fi
+}
+
+# this function returns tempfile with the content uncompressed. 
+# you should release this file, when you finish with it.
+io_uncompress_file()
+{
+	local file=$1
+	local filetype=$(file $file | awk '{print $2}')
+	debug "uncompressing $filetype $file"
+	local uncompressed_file=$(create_temp_file)
+	case $filetype in
+		bzip2)	bzcat $file > $uncompressed_file;;
+		gzip)	gzip -cd $file > $uncompressed_file;;
+		*)	cp $file $uncompressed_file;;
+	esac
+	echo $uncompressed_file
 }

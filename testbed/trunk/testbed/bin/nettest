@@ -281,11 +281,13 @@ run_experiment()
 	    # Wait for those flows
 	    wait ${TEST_PIDS[*]}
 	    TEST_PIDS=()
+	    
+	    local output_file_prefix="$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-${FILE}"
 
 	    if [[ $PING = "on" ]]; then
 	       for C in ${CLIENTS[*]}
 	       do
-		  remote_stop_ping_logging $C "$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-${FILE}-${f}.ping"
+		  remote_stop_ping_logging $C "$output_file_prefix.ping"
 	       done
 	    fi
 
@@ -319,11 +321,11 @@ run_experiment()
 		if [ $USEROUTER="yes" ]; then
 		     DESC="RTT ${RTT}ms, ${RATE}Mbps, queue ${Q}xBDP, lossrate ${LOSSRATE}."
 		fi
-		output_filename=$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-$FILE.probe
-		header_comment="# $COMMENT ${NUMFLOWS} ${TCP} flows. $APPLICATIONS. $DESC $FILE\n# Application options: $OPTS"
-		echo -e $header_comment > $output_filename
-		$IO_UNCOMPRESS_COMMAND ${PROBE_OUT[*]} > $output_filename
-		$IO_COMPRESS_COMMAND $output_filename > $output_filename.gz
+		local probe_file=$output_file_prefix.probe
+		local header_comment="# $COMMENT ${NUMFLOWS} ${TCP} flows. $APPLICATIONS. $DESC $FILE\n# Application options: $OPTS"
+		echo -e $header_comment > $probe_file
+		$IO_UNCOMPRESS_COMMAND ${PROBE_OUT[*]} > $probe_file
+		$IO_COMPRESS_COMMAND $probe_file > $probe_file.gz
 		rm -f ${PROBE_OUT[*]}
 		PROBE_OUT=()
 	    fi
@@ -333,7 +335,7 @@ run_experiment()
 		echo -e "# $COMMENT ${NUMFLOWS} ${TCP} flows. $APPLICATIONS." \
 		"$DESC $FILE\n"\
 		"# Application options: $OPTS"\
-		| cat - ${DUMP_OUT[*]} > $NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-$FILE.dump
+		| cat - ${DUMP_OUT[*]} > $output_file_prefix.dump
 		rm -f ${DUMP_OUT[*]}
 	    fi
 	    if [[ ${APP} = "iperf" ]]; then
@@ -344,7 +346,7 @@ run_experiment()
 		echo -e "# $COMMENT ${NUMFLOWS} ${TCP} flows. $APPLICATIONS." \
 		     "$DESC $FILE\n"\
 		     "# Application options: $OPTS"\
-		| cat - ${APP_OUT[*]} > $NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-$FILE.iprf
+		| cat - ${APP_OUT[*]} > $output_file_prefix.iprf
 		#rm -f ${APP_OUT[*]}
 	    fi
 	    echo >>$OUTFILE

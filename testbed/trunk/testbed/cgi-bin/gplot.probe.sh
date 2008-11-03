@@ -9,10 +9,8 @@ source $LIB_PATH/cgi
 # plot cwnd data reconstructed from tcpdump 
 input_file=$PATH_TRANSLATED
 
-probe_datafile=$(create_temp_file)
-$IO_UNCOMPRESS_COMMAND $input_file > $probe_datafile \
-	|| cp $input_file $probe_datafile
-
+[  -e $input_file ] \
+	&& probe_datafile=$(io_uncompress_file $input_file)
 
 FORMAT=$(cgi_query_string format $QUERY_STRING)
 PLOTNUM=$(cgi_query_string plot $QUERY_STRING)

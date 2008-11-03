@@ -10,9 +10,8 @@ source $LIB_PATH/plots
 # plot cwnd data reconstructed from tcpdump 
 input_file=$PATH_TRANSLATED
 
-tcpdump_file=$(create_temp_file)
-$IO_UNCOMPRESS_COMMAND $input_file > $tcpdump_file \
-	|| cp $input_file $tcpdump_file
+[  -e $input_file ] \
+	&& tcpdump_file=$(io_uncompress_file $input_file)
 
 FORMAT=$(cgi_query_string format $QUERY_STRING)
 STYLE2=$(cgi_query_string style2 $QUERY_STRING)
@@ -53,9 +52,10 @@ starttime=`grep -v -i "#" $tcpdump_file | head -n 1 | cut -d ' ' -f 1`
 flow_ids=` grep -v -i "#" $tcpdump_file | cut -d ' ' -f 2 | sort | uniq `
 
 #now sort output for gnuplot
-itemp=`mktemp -t i.XXXXXX` || echo "can't create temp file"
-temp=`mktemp -t probe.XXXXXX` || echo "can't create temp file"
-tput=`mktemp -t tput.XXXXX` || echo "can't create temp file"  
+itemp=$(create_temp_file)
+temp=$(create_temp_file)
+tput=$(create_temp_file)
+
 comma=''; plot='plot '; 
 j=0
 for i in $flow_ids; do
@@ -74,26 +74,25 @@ done
 title1=`grep -i "#" $tcpdump_file | sed -n '1p' | sed -e 's/#//'`
 title2=`grep -i "#" $tcpdump_file | sed -n '2p' | sed -e 's/#//'`
 
-rtt=`mktemp -t rtt.XXXXX` || echo "can't create temp file"
-rttfile=`echo $input_file | sed -e 's/\.dump/-0\.ping/'`
 if [  -e $rttfile ]; then
-        awk '/time=/ {split($0,pieces,"time="); split(pieces[2],pieces," "); print pieces[1]} ' $rttfile >$rtt
+	ping_inputfile=$(echo $input_file | sed -e 's/\.dump/\.ping/')
+	rttfile=$(io_uncompress_file $ping_inputfile)
+	rtt=$(create_temp_file)
+        awk '/time=/ {split($0,pieces,"time="); split(pieces[2],pieces," "); print pieces[1]} ' $rttfile > $rtt
 	#sed -e '1d' | cut -f 7 -d ' ' | cut -f 2 -d '=' >$rtt
         plotping="plot \"$rtt\" u (\$0*1):1 with $STYLE title \"ping time\" "
 else
         plotping=""
 fi
 
-iperf=`mktemp -t iperf.XXXXXX` || echo "can't create temp file"
 iperffile=`echo $input_file | sed -e 's/dump/iprf/'`
-if [  -e $iperffile ]; then
-zcat $iperffile > $iperf || cp $iperffile $iperf
+[  -e $iperffile ] && iperf=$(io_uncompress_file $iperffile)
+
 #first get list of unique destination ip and ports
 flow_ids=`grep -v -i "#" $iperf | cut -d ' ' -f 1 | sort | uniq `
 units=`cut -d ' ' -f 5 $iperf | head -n 1`
 
 ##now sort output for gnuplot
-#itemp=`mktemp -t i.XXXXXX` || echo "can't create temp file"
 comma=''; iplot='plot '; 
 j=0
 for i in $flow_ids; do
@@ -127,7 +126,6 @@ awk --non-decimal-data \
 ititle1=`grep -i "#" $iperf | sed -n '1p' | sed -e 's/#//'`
 ititle2=`grep -i "#" $iperf | sed -n '2p' | sed -e 's/#//'`
 
-fi
 title1=`grep -i "#" $tcpdump_file | sed -n '1p' | sed -e 's/#//'`
 title2=`grep -i "#" $tcpdump_file | sed -n '2p' | sed -e 's/#//'`
 title3=$meantputs
@@ -209,5 +207,9 @@ gnuplot <<- EOF
 	$MEND
 EOF
 
-rm $tcpdump_file $temp $rtt $iperf $itemp
+release_temp_file $tcpdump_file 
+release_temp_file $temp 
+release_temp_file $rtt 
+release_temp_file $iperf 
+release_temp_file $itemp
 
