@@ -17,6 +17,7 @@ source $LIB_PATH/tcp
 source $LIB_PATH/iperf
 source $LIB_PATH/router
 source $LIB_PATH/plots
+source $LIB_PATH/ping
 
 # Globals
 declare -a RATES RTTS QUEUES TCPS
@@ -103,6 +104,8 @@ set_tcp()
 		if [[ $tcp != "DEFAULT" ]]; then
 			tcp_change_ca_algorithm_on_client $tcp $S "tcp_$tcp"
 		fi
+		remote_run_command_on_client root $S "echo 1 > /proc/sys/net/ipv4/tcp_abc"
+		remote_run_command_on_client root $S "cat /proc/sys/net/ipv4/tcp_abc"
 		((s++))
 	done
 }

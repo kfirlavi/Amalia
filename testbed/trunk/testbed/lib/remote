@@ -34,6 +34,22 @@ remote_load_kernel_module_on_client()
 	debug "loading '$module' on $host"
 	remote_remove_kernel_module_on_client $host $module
 	remote_run_command_on_client root $host "modprobe $module"
+	remote_check_if_module_is_loaded $host $module
+	[[ -z $(remote_check_if_module_is_loaded $host $module) ]] \
+		&& io_exit_with_error "can't load module $module"
+}
+
+remote_check_if_module_is_loaded()
+{
+	local host=$1
+	local module=$2
+	local ret=$(remote_run_command_on_client root $host "lsmod | grep $module")
+	if [[ -z $ret ]]; then
+		debug "module $module is not loaded on $host"
+		echo
+	else
+		echo yes
+	fi
 }
 
 remote_copy_file_to_host()

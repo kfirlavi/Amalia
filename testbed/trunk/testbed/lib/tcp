@@ -29,7 +29,8 @@ tcp_change_ca_algorithm_on_client()
 	local host=$2
 	local module="tcp_$algorithm"
 	verbose "loading congestion algorithm: $algorithm on $host"
-	[[ $algorithm -ne "reno" ]] && remote_load_kernel_module_on_client $host $module
+	[[ $algorithm != "reno" ]] \
+		&& remote_load_kernel_module_on_client $host $module
 	remote_run_command_on_client root $host "echo $algorithm > $TCP_CONGESTION_CONTROL_PROC_FILE"
 }
 

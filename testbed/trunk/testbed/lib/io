@@ -277,3 +277,11 @@ io_uncompress_file()
 	esac
 	echo $uncompressed_file
 }
+
+io_exit_with_error()
+{
+	local error_string=$@
+	error "$error_string"
+	error "Exiting..."
+	exit 1
+}
