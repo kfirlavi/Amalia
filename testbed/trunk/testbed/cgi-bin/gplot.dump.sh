@@ -27,6 +27,7 @@ get_query_string_params()
 	SIZE=$(cgi_query_string size $QUERY_STRING)
 	NOTPUT=$(cgi_query_string tput $QUERY_STRING)
 	SINGLEPLOT=$(cgi_query_string singleplot $QUERY_STRING)
+	POINTSIZE=$(cgi_query_string pointsize $QUERY_STRING)
 }
 
 set_format()
@@ -232,7 +233,7 @@ multi_plot()
 {
 	gnuplot <<- EOF
 		set terminal $FORMAT  
-		#set pointsize 0.3
+		$(plots_pointsize_command $POINTSIZE)
 		set xlabel "time (s)"
 		set ylabel "cwnd (packets)"
 		set xrange [$XLO:$XHI]
@@ -279,6 +280,7 @@ single_plot()
 	local ylabel=$2
 	gnuplot <<- EOF
 		set terminal $FORMAT  
+		$(plots_pointsize_command $POINTSIZE)
 		set xlabel $xlabel
 		set ylabel $ylabel
 		set xrange [$XLO:$XHI]

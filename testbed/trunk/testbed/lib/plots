@@ -9,6 +9,7 @@ PLOTS_GOLDEN_RATIO=1.61803399
 PLOTS_EPS_WHITE_BLACK_PLOT_SUFFIX=bw.eps
 PLOTS_EPS_COLOR_PLOT_SUFFIX=color.eps
 PLOTS_PLOT_DATAFILE_SUFFIX=data
+PLOTS_DEFAULT_POINTSIZE=1
 
 plots_generate_index_file()
 {
@@ -80,3 +81,12 @@ plots_replot_eps()
 		replot
 		EOF
 }
+
+# will return notheing if size is not supplied
+# this will make the plot use the default size
+plots_pointsize_command()
+{
+	local size=${1:-$PLOTS_DEFAULT_POINTSIZE}
+	echo "set pointsize $size"
+}
+
