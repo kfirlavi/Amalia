@@ -290,7 +290,7 @@ run_experiment()
 	    if [[ $PING = "on" ]]; then
 	       for C in ${CLIENTS[*]}
 	       do
-		  remote_stop_ping_logging $C "$output_file_prefix.ping"
+		  ping_stop_remote_logging $C "$output_file_prefix.ping"
 	       done
 	    fi
 
