@@ -33,8 +33,8 @@ get_query_string_params()
 set_format()
 {
 	if [[ $FORMAT = "eps" ]]; then
-	  FORMAT="postscript eps enhanced color"
-	  MIME="Application/PostScript"
+		FORMAT="postscript eps enhanced color"
+		MIME="Application/PostScript"
 	fi
 	if [[ $FORMAT = "" ]]; then
 		if [[ $SIZE -gt 0 ]]; then
@@ -43,14 +43,14 @@ set_format()
 			FORMAT="png size $(plots_get_plot_size)"
 		fi
 		
-	  MIME="image/png"
+		MIME="image/png"
 	fi
 }
 
 set_style()
 {
 	if [[ $STYLE = "" ]]; then
-	  STYLE="points"
+		STYLE="points"
 	fi
 }
 
@@ -80,14 +80,14 @@ generate_gnuplot_command_of_cwnd_tput_plot()
 	local plot_command='plot ' 
 	local j=0
 	for i in $(get_uniq_ip_and_ports_from_tcpdump $tcpdump_file); do
-	   grep -i $i $tcpdump_file >> $cwnd_plot_data
-	   echo -e '\n\n' >> $cwnd_plot_data
-	   plot_command="$plot_command $comma '$cwnd_plot_data' index $j u (\$1-$starttime):(\$3/1448) with $STYLE title 'flow $j cwnd' "
-	   if [[ ! $NOTPUT ]]; then
-	      plot_command="$plot_command, '$tput_plot_data' index $j u (\$1-$starttime):2 with $STYLE axes x1y2 title 'flow $j tput' "
-	   fi
-	   comma=","
-	   ((j++))
+		grep -i $i $tcpdump_file >> $cwnd_plot_data
+		echo -e '\n\n' >> $cwnd_plot_data
+		plot_command="$plot_command $comma '$cwnd_plot_data' index $j u (\$1-$starttime):(\$3/1448) with $STYLE title 'flow $j cwnd' "
+		if [[ ! $NOTPUT ]]; then
+			plot_command="$plot_command, '$tput_plot_data' index $j u (\$1-$starttime):2 with $STYLE axes x1y2 title 'flow $j tput' "
+		fi
+		comma=","
+		((j++))
 	done
 	echo $plot_command
 }
@@ -104,7 +104,7 @@ get_title_from_dumpfile()
 generate_ping_data()
 {
 	local rttfile=$1
-        awk '/time=/ {
+	awk '/time=/ {
 		split($0,pieces,"time="); 
 		split(pieces[2],pieces," "); 
 		print pieces[1]
@@ -179,11 +179,11 @@ comma='';
 iperf_plot_command='plot '; 
 j=0
 for i in $flow_ids; do
-   grep -i $i $iperf >> $iperf_plot_data
-   echo -e '\n\n' >>$iperf_plot_data
-   iplot="$iperf_plot_command $comma '$iperf_plot_data' index $j using 2:4 with $STYLE title 'flow $j tput'"
-   comma=","
-   ((j++))
+	grep -i $i $iperf >> $iperf_plot_data
+	echo -e '\n\n' >>$iperf_plot_data
+	iplot="$iperf_plot_command $comma '$iperf_plot_data' index $j using 2:4 with $STYLE title 'flow $j tput'"
+	comma=","
+	((j++))
 done
 
 
@@ -198,36 +198,43 @@ plott="plot [][0:1] 2"
 MSTART="set size 2,2; set origin 0,0; set multiplot"
 MEND="unset multiplot"
 if [[ "$PLOTNUM" -eq 1 ]]; then
-   iplot=""
-   ping_plot_command=""
-   plott=""
-   #MSTART=""
-   #MEND=""
+	iplot=""
+	ping_plot_command=""
+	plott=""
+	#MSTART=""
+	#MEND=""
 elif [[ "$PLOTNUM" -eq 2 ]]; then
-   plot=""
-   ping_plot_command=""
-   plott=""
-   MSTART=""
-   MEND=""
+	plot=""
+	ping_plot_command=""
+	plott=""
+	MSTART=""
+	MEND=""
 fi
 
 if [[ $TITLE = "off" ]]; then
-   title1=""
-   title2=""
-   title3=""
-   plott=""
+	title1=""
+	title2=""
+	title3=""
+	plott=""
 fi
 
 preamble=""
 if [[ $STYLE2 = "lachlan" ]]; then
-   preamble="set size 0.5,0.35" 
-   #preamble="set size 0.5,0.42"
+	preamble="set size 0.5,0.35" 
+	#preamble="set size 0.5,0.42"
 fi
 
-YAXIS='set y2label "throughput (Mbps)"; set ytics nomirror; set y2range [0:]; set y2tics'
-if [[ $NOTPUT ]]; then
-	YAXIS=""
-fi
+get_tput_axis_command()
+{
+	if [[ -z $NOTPUT ]]; then
+		cat <<- EOF
+			set y2label "throughput (Mbps)"
+			set ytics nomirror
+			set y2range [0:]
+			set y2tics
+		EOF
+	fi
+}
 
 multi_plot()
 {
@@ -242,7 +249,7 @@ multi_plot()
 		#set ytics nomirror
 		#set y2range [0:]
 		#set y2tics
-		$YAXIS
+		$(get_tput_axis_command)
 		$MSTART
 		set title ""
 
@@ -274,26 +281,35 @@ multi_plot()
 	EOF
 }
 
-single_plot()
+generate_cwnd_plot()
 {
-	local xlabel=$1
-	local ylabel=$2
+	local tcpdump_file=$1
+	local xlabel="time (sec)"
+	local ylabel="cwnd (packets)"
+	local cwnd_plot_data=$(create_temp_file)
+	local tput_plot_data=$(create_temp_file)
+	local plot_command=$(generate_gnuplot_command_of_cwnd_tput_plot $tcpdump_file $cwnd_plot_data $tput_plot_data)
+	generate_tput_plot_data $cwnd_plot_data > $tput_plot_data
+
 	gnuplot <<- EOF
 		set terminal $FORMAT  
 		$(plots_pointsize_command $POINTSIZE)
-		set xlabel $xlabel
-		set ylabel $ylabel
+		set xlabel "$xlabel"
+		set ylabel "$ylabel"
 		set xrange [$XLO:$XHI]
 		set yrange [$YLO:$YHI]
-		set title ""
-		$preamble
-		$plot
+		set title "$title"
+		$(get_tput_axis_command)
+		$plot_command
 	EOF
+
+	release_temp_file $cwnd_plot_data
+	release_temp_file $tput_plot_data
 }
 
 case "$SINGLEPLOT" in
 	cwnd)
-		single_plot "time (s)" "cwnd (packets)"
+		generate_cwnd_plot $TCPDUMP_FILE
 		;;
 	tput)
 		single_plot "time (s)" "cwnd (packets)"
@@ -307,9 +323,9 @@ case "$SINGLEPLOT" in
 esac
 
 release_temp_file $TCPDUMP_FILE 
-release_temp_file $cwnd_plot_data 
-release_temp_file $tput_plot_data
 release_temp_file $rtt 
 release_temp_file $iperf 
+release_temp_file $cwnd_plot_data 
+release_temp_file $tput_plot_data
+release_temp_file $rtt_plot_data
 release_temp_file $iperf_plot_data
-
