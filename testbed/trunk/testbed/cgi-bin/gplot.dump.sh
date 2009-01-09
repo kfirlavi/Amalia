@@ -307,6 +307,24 @@ generate_cwnd_plot()
 	release_temp_file $tput_plot_data
 }
 
+generate_ping_plot()
+{
+	local ping_plot_command=$(generate_ping_plot_command)
+	local xlabel="time (sec)"
+	local ylabel="ping time (ms)"
+
+	gnuplot <<- EOF
+		set terminal $FORMAT  
+		$(plots_pointsize_command $POINTSIZE)
+		set xlabel "$xlabel"
+		set ylabel "$ylabel"
+		set xrange [$XLO:$XHI]
+		set yrange [$YLO:$YHI]
+		set title "$title"
+		$ping_plot_command
+	EOF
+}
+
 case "$SINGLEPLOT" in
 	cwnd)
 		generate_cwnd_plot $TCPDUMP_FILE
@@ -315,7 +333,7 @@ case "$SINGLEPLOT" in
 		single_plot "time (s)" "cwnd (packets)"
 		;;
 	ping)
-		single_plot "time (s)" "cwnd (packets)"
+		generate_ping_plot
 		;;
 	*)
 		multi_plot;
