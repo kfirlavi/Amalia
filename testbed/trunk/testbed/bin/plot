@@ -60,11 +60,19 @@ check_for_required_opts()
 	fi
 }
 
+check_for_valid_datafile()
+{
+	if [[ ! -e $DATAFILE ]]; then
+		io_exit_with_error "$DATAFILE don't exist"
+	fi
+}
+
 process_options()
 {
 	opts_check_for_no_opts
 	get_opts $OPTS_ARGS
 	check_for_required_opts
+	check_for_valid_datafile
 }
 
 get_datafile_extention()
@@ -99,8 +107,9 @@ generate_ping_image()
 
 generate_probe_image()
 {
-	local datafile=$1
-	echo im in probe
+	local filename=$1
+	local datafile=$2
+	tcp_plot_cwnd_and_throughput $filename $datafile
 }
 
 main()
@@ -108,6 +117,12 @@ main()
 	configuration_load
 	process_options
 	local ext=$(get_datafile_extention $DATAFILE)
-	generate_${ext}_image $DATAFILE
+	local datafile_uncompressed=$(io_uncompress_file $DATAFILE)
+	
+	# dispatch the right generator
+	generate_${ext}_image $DATAFILE $datafile_uncompressed
+
+	# clean
+	release_temp_file $datafile_uncompressed
 }
 main
