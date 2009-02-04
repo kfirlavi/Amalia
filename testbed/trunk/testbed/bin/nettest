@@ -178,7 +178,7 @@ cleanup() {
     done
     for C in ${CLIENTS[*]}
     do
-       ping_stop_remote_logging $C "$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-${FILE}-${f}.ping"
+       ping_stop_remote_logging $C "$NETTEST_RESULT/${TCP}-${RTT}ms-${RATE}Mbps-Q$Q-L${LOSSRATE}-${FILE}-${f}.ping.gz"
     done
     rm -f ${PROBE_OUT[*]} ${TMP[*]}
     exit
@@ -290,7 +290,7 @@ run_experiment()
 	    if [[ $PING = "on" ]]; then
 	       for C in ${CLIENTS[*]}
 	       do
-		  ping_stop_remote_logging $C "$output_file_prefix.ping"
+		  ping_stop_remote_logging $C "$output_file_prefix.ping.gz"
 	       done
 	    fi
 
@@ -329,7 +329,7 @@ run_experiment()
 		echo -e $header_comment > $probe_file
 		$IO_UNCOMPRESS_COMMAND ${PROBE_OUT[*]} > $probe_file
 		$IO_COMPRESS_COMMAND $probe_file > $probe_file.gz
-		rm -f ${PROBE_OUT[*]}
+		rm -f ${PROBE_OUT[*]} $probe_file
 		PROBE_OUT=()
 	    fi
 
