@@ -171,7 +171,31 @@ tcp_generate_gnuplot_index_datafile_by_flow_ids()
 tcp_generate_throughput_from_packet_sequence_numbers()
 {
 	local indexfile=$1
-	awk --non-decimal-data 'BEGIN {t=-1; dt=1; } {if (NF < 6) printf "\n\n"; else {seq=$6; if (t<0 || t>$1) {t=$1; lastseq=seq; print $1, 0}; if ($1-t >= dt) {print $1, (seq-lastseq)*8/1024/1024/($1-t); t=$1; lastseq=seq}; } } ' $indexfile
+	awk --non-decimal-data '
+		BEGIN {t=-1; dt=1; }
+		{
+			if (NF < 6)
+			{
+				printf "\n\n"
+			}
+			else
+			{
+				seq=$6
+				if (t<0 || t>$1) 
+				{
+					t=$1
+					lastseq=seq
+					print $1, 0
+				} 
+				if ($1-t >= dt) 
+				{
+					print $1, (seq-lastseq)*8/1024/1024/($1-t)
+					t=$1
+					lastseq=seq
+				} 
+			} 
+		} 
+	' $indexfile
 }
 
 tcp_plot_cwnd_and_throughput()
