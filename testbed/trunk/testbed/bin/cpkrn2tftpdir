@@ -160,6 +160,10 @@ write_pxe_default_file()
 	kernel="${TFTP_KERNEL_RELATIVE_DIR}/${KERNEL_PREFIX}${1}"
 	initrd="initrd=${TFTP_KERNEL_RELATIVE_DIR}/${INITRD_PREFIX}${1}"
 	local pxe_pre="DEFAULT $kernel ro $initrd"
+	rm -f $PXE_DEFAULT_BOOT_FILE
+	rm -f $PXE_AP_BOOT_FILE
+	rm -f $PXE_SRC_BOOT_FILE
+	rm -f $PXE_CLIENTS_BOOT_FILE
 	echo "$pxe_pre $DEFAULT_KERNEL_PARAMS" > $PXE_DEFAULT_BOOT_FILE
 	echo "$pxe_pre $AP_KERNEL_PARAMS" > $PXE_AP_BOOT_FILE
 	echo "$pxe_pre $SRC_KERNEL_PARAMS" > $PXE_SRC_BOOT_FILE
