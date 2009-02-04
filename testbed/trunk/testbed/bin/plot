@@ -96,19 +96,20 @@ get_datafile_extention()
 generate_dump_image()
 {
 	local datafile=$1
-	echo im in dump
+	verbose "Generating tcpdump plot for $filename"
 }
 
 generate_ping_image()
 {
 	local datafile=$1
-	echo im in ping
+	verbose "Generating ping plot for $filename"
 }
 
 generate_probe_image()
 {
 	local filename=$1
 	local datafile=$2
+	verbose "Generating probe plot for $filename"
 	tcp_plot_cwnd_and_throughput $filename $datafile
 }
 
