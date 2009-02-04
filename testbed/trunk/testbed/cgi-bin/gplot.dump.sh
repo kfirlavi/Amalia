@@ -9,6 +9,7 @@ source $LIB_PATH/plots
 
 # plot cwnd data reconstructed from tcpdump 
 input_file=$PATH_TRANSLATED
+INPUTFILE_BASE_NAME=$(echo $input_file | sed 's/\.dump//')
 
 [ -e $input_file ] \
 	&& TCPDUMP_FILE=$(io_uncompress_file $input_file)
@@ -115,7 +116,7 @@ generate_ping_plot_command()
 {
 	local ping_plot_command=
 	if [  -e $rttfile ]; then
-		ping_inputfile=$(echo $input_file | sed -e 's/\.dump/\.ping/')
+		ping_inputfile=$INPUTFILE_BASE_NAME.ping.gz
 		rttfile=$(io_uncompress_file $ping_inputfile)
 		rtt_plot_data=$(create_temp_file)
 		generate_ping_data $rttfile > $rtt_plot_data
@@ -166,7 +167,7 @@ main()
 }
 main
 
-iperffile=`echo $input_file | sed -e 's/dump/iprf/'`
+iperffile=$INPUTFILE_BASE_NAME.iprf
 [  -e $iperffile ] && iperf=$(io_uncompress_file $iperffile)
 
 #first get list of unique destination ip and ports

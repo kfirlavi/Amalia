@@ -8,6 +8,7 @@ source $LIB_PATH/cgi
 
 # plot cwnd data reconstructed from tcpdump 
 input_file=$PATH_TRANSLATED
+INPUTFILE_BASE_NAME=$(echo $input_file | sed 's/\.dump//')
 
 [  -e $input_file ] \
 	&& probe_datafile=$(io_uncompress_file $input_file)
@@ -57,7 +58,10 @@ for i in $flow_ids; do
    ((j++))
 done
 
-rttfile=`echo $input_file | sed -e 's/\.probe/\.ping/'`
+[ -e $INPUTFILE_BASE_NAME.ping.gz ] && \
+	rttfile=$(io_uncompress_file $INPUTFILE_BASE_NAME.ping.gz)
+[ -e $INPUTFILE_BASE_NAME.ping ] && \
+	rttfile=$(io_uncompress_file $INPUTFILE_BASE_NAME.ping)
 if [  -e $rttfile ]; then
 	cut -f 8 -d ' ' $rttfile | cut -f 2 -d '=' >$rtt
 	plotping="plot \"$rtt\" title \"ping time\" "
