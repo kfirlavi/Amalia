@@ -1,0 +1,113 @@
+#!/bin/bash
+IO_COMMAND="$0 $@"
+
+# load libraries
+LIB_PATH="$(dirname $0)/../lib"
+
+source $LIB_PATH/io
+source $LIB_PATH/configuration
+source $LIB_PATH/opts
+source $LIB_PATH/tcpdump
+source $LIB_PATH/wireless
+source $LIB_PATH/madwifi
+source $LIB_PATH/tcp
+source $LIB_PATH/iperf
+source $LIB_PATH/router
+source $LIB_PATH/plots
+
+# Globals
+FILE_TYPES="dump ping probe"
+
+usage()
+{
+	prog=$(basename $0)
+	cat <<- EOF
+		usage: $prog -f file
+
+		will generate graph from a data file. It can be tcp probe log, tcpdump log or ping log.
+
+		EXAMPLE: $prog  -f file
+
+		OPTIONS:
+			-f	datafile - tcpdump, tcpprobe, ping ...
+			-h	Show this message
+			-v 	verbose
+			-x	debug
+		EOF
+}
+
+get_opts()
+{
+	while getopts "t:f:vhx" options; do
+		case $options in
+			f) DATAFILE=$OPTARG;;
+			v) VERBOSE=1;;
+			x) DEBUG=1;;
+			h) usage
+			   exit;;
+			*) usage
+			   exit 1;;
+		esac
+	done
+}
+
+check_for_required_opts()
+{
+	if [[ -z $DATAFILE ]]
+	then 
+		usage
+		exit 1
+	fi
+}
+
+process_options()
+{
+	opts_check_for_no_opts
+	get_opts $OPTS_ARGS
+	check_for_required_opts
+}
+
+get_datafile_extention()
+{
+	local filename=$1
+	local filetype=
+	
+	for i in $FILE_TYPES
+	do
+		echo $filename | egrep -q "\.$i$|\.$i\.gz$"
+		[[ $? == 0 ]] && filetype=$i
+	done
+	if [[ -z $filetype ]]
+	then
+		io_exit_with_error "can't recognize file extention"
+	else
+		echo $filetype
+	fi
+}
+
+generate_dump_image()
+{
+	local datafile=$1
+	echo im in dump
+}
+
+generate_ping_image()
+{
+	local datafile=$1
+	echo im in ping
+}
+
+generate_probe_image()
+{
+	local datafile=$1
+	echo im in probe
+}
+
+main()
+{
+	configuration_load
+	process_options
+	local ext=$(get_datafile_extention $DATAFILE)
+	generate_${ext}_image $DATAFILE
+}
+main
