@@ -18,10 +18,19 @@ TCP_WINDOW="10m" # default 10 MB window
 TCP_PNG_SIZE="800,600"
 
 # Columns position in tcpprobe file
+TCP_TCPPROBE_COL_TIME=1
+TCP_TCPPROBE_COL_SOURCE_IP_PORT=2
+TCP_TCPPROBE_COL_DEST_IP_PORT=3
+TCP_TCPPROBE_COL_SKB_LEN=4
+TCP_TCPPROBE_COL_SND_NXT=5
+TCP_TCPPROBE_COL_SND_UNA=6
+TCP_TCPPROBE_COL_SND_CWND=7
+TCP_TCPPROBE_COL_SSTHRESH=8
+TCP_TCPPROBE_COL_SND_WND=9
+TCP_TCPPROBE_COL_SRTT=10
 TCP_TCPPROBE_COL_SEQ=11
 TCP_TCPPROBE_COL_ACK_SEQ=12
 TCP_TCPPROBE_COL_RAW_RTT=13
-TCP_TCPPROBE_COL_SRTT=10
 
 tcp_change_ca_algorithm_on_client()
 {
@@ -211,7 +220,7 @@ tcp_plot_cwnd_and_throughput()
 	local comma=
 	local plot_command="plot"
 	for i in $flow_ids; do
-		plot_command="$plot_command $comma '$plot_indexed_datafile' index $j using 1:7 with lines title 'flow $j cwnd', "
+		plot_command="$plot_command $comma '$plot_indexed_datafile' index $j using $TCP_TCPPROBE_COL_TIME:$TCP_TCPPROBE_COL_SND_CWND with lines title 'flow $j cwnd', "
 		plot_command="$plot_command '$plot_throughput_datafile' index $j using 1:2 with points axes x1y2 title 'flow $j tput'"
 		comma=","
 		((j++))
@@ -220,6 +229,13 @@ tcp_plot_cwnd_and_throughput()
 	gnuplot <<- EOF
 		set term png size $TCP_PNG_SIZE
 		set output "$filename_prefix.png"
+		set xlabel "time (s)"
+		set ylabel "cwnd (packets)"
+		set y2label "throughput (Mbps)"
+		set ytics nomirror
+		set y2range [0:]
+		set y2tics
+		set xrange [0:]
 		$plot_command
 		$(plots_replot_eps $filename_prefix)
 		EOF
