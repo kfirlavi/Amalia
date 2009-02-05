@@ -294,3 +294,11 @@ io_exit_if_path_is_not_valid()
 	fi
 }
 
+io_exit_if_directory_is_not_valid()
+{
+	local dir=$1
+	if [[ ! -d $dir ]]; then
+		io_exit_with_error "$dir is not a directory"
+	fi
+}
+

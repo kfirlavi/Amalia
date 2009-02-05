@@ -70,7 +70,7 @@ process_options()
 	get_opts $OPTS_ARGS
 	check_for_required_opts
 	[[ ! -z $DATAFILE ]] && io_exit_if_path_is_not_valid $DATAFILE
-	[[ ! -z $DIRECTORY ]] && io_exit_if_path_is_not_valid $DIRECTORY
+	[[ ! -z $DIRECTORY ]] && io_exit_if_directory_is_not_valid $DIRECTORY
 }
 
 get_datafile_extention()
