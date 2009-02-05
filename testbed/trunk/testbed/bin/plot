@@ -14,6 +14,7 @@ source $LIB_PATH/plots
 
 # Globals
 FILE_TYPES="dump ping probe"
+DEFAULT_PLOTS_DIR=plots
 
 usage()
 {
@@ -119,9 +120,12 @@ main()
 	process_options
 	local ext=$(get_datafile_extention $DATAFILE)
 	local datafile_uncompressed=$(io_uncompress_file $DATAFILE)
+	local plot_output_dir="$(dirname $DATAFILE)/$DEFAULT_PLOTS_DIR"
+	create_directory $plot_output_dir
+	local plot_filename_prefix="$plot_output_dir/$(basename $DATAFILE)"
 	
 	# dispatch the right generator
-	generate_${ext}_image $DATAFILE $datafile_uncompressed
+	generate_${ext}_image $plot_filename_prefix $datafile_uncompressed
 
 	# clean
 	release_temp_file $datafile_uncompressed
