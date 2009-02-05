@@ -20,14 +20,18 @@ usage()
 {
 	prog=$(basename $0)
 	cat <<- EOF
-		usage: $prog -f file
+		usage: $prog [-f file] [-d directory]
 
 		will generate graph from a data file. It can be tcp probe log, tcpdump log or ping log.
+		If plot exist, it will not generate a plot. Use -n to force regeneration of plots.
 
 		EXAMPLE: $prog  -f file
+		         $prog  -d /dir/to/files
 
 		OPTIONS:
 			-f	datafile - tcpdump, tcpprobe, ping ...
+			-d	generate plots for all the data files supported found in the directory
+			-n	force overwrite of plots.
 			-h	Show this message
 			-v 	verbose
 			-x	debug
@@ -36,9 +40,11 @@ usage()
 
 get_opts()
 {
-	while getopts "t:f:vhx" options; do
+	while getopts "t:d:f:nvhx" options; do
 		case $options in
 			f) DATAFILE=$OPTARG;;
+			d) DIRECTORY=$OPTARG;;
+			n) OVERWRITE_PLOTS=1;;
 			v) VERBOSE=1;;
 			x) DEBUG=1;;
 			h) usage
@@ -51,17 +57,10 @@ get_opts()
 
 check_for_required_opts()
 {
-	if [[ -z $DATAFILE ]]
+	if [[ -z $DATAFILE && -z $DIRECTORY ]]
 	then 
 		usage
 		exit 1
-	fi
-}
-
-check_for_valid_datafile()
-{
-	if [[ ! -e $DATAFILE ]]; then
-		io_exit_with_error "$DATAFILE don't exist"
 	fi
 }
 
@@ -70,7 +69,8 @@ process_options()
 	opts_check_for_no_opts
 	get_opts $OPTS_ARGS
 	check_for_required_opts
-	check_for_valid_datafile
+	[[ ! -z $DATAFILE ]] && io_exit_if_path_is_not_valid $DATAFILE
+	[[ ! -z $DIRECTORY ]] && io_exit_if_path_is_not_valid $DIRECTORY
 }
 
 get_datafile_extention()
@@ -114,20 +114,52 @@ generate_probe_image()
 	tcp_plot_cwnd_and_throughput $filename $datafile
 }
 
+plot_files_exist()
+{
+	local file=$1
+	local file_basename=$(basename $file)
+	local file_dir=$(dirname $file)
+	find $file_dir -type f -name "$file_basename*"
+}
+
+generate_plots_for_file()
+{
+	local file=$1
+	local ext=$(get_datafile_extention $file)
+	local datafile_uncompressed=$(io_uncompress_file $file)
+	local plot_output_dir="$(dirname $file)/$DEFAULT_PLOTS_DIR"
+	create_directory $plot_output_dir
+	local plot_filename_prefix="$plot_output_dir/$(basename $file)"
+	
+	if [[ -z $(plot_files_exist $plot_filename_prefix) || $OVERWRITE_PLOTS ]]; then
+		# dispatch the right generator
+		generate_${ext}_image $plot_filename_prefix $datafile_uncompressed
+	fi
+
+	# clean
+	release_temp_file $datafile_uncompressed
+}
+
+generate_plots_for_directory()
+{
+	local dir=$1
+	verbose "working on directory $dir"
+	for t in $FILE_TYPES
+	do
+		verbose "searching for $t files"
+		local file=
+		for file in $(find $dir -name "*$t.gz" -or -name "*$t")
+		do
+			generate_plots_for_file $file
+		done
+	done
+}
+
 main()
 {
 	configuration_load
 	process_options
-	local ext=$(get_datafile_extention $DATAFILE)
-	local datafile_uncompressed=$(io_uncompress_file $DATAFILE)
-	local plot_output_dir="$(dirname $DATAFILE)/$DEFAULT_PLOTS_DIR"
-	create_directory $plot_output_dir
-	local plot_filename_prefix="$plot_output_dir/$(basename $DATAFILE)"
-	
-	# dispatch the right generator
-	generate_${ext}_image $plot_filename_prefix $datafile_uncompressed
-
-	# clean
-	release_temp_file $datafile_uncompressed
+	[[ ! -z $DATAFILE ]] && generate_plots_for_file $DATAFILE
+	[[ ! -z $DIRECTORY ]] && generate_plots_for_directory $DIRECTORY
 }
 main
