@@ -112,6 +112,7 @@ generate_probe_image()
 	local datafile=$2
 	verbose "Generating probe plot for $filename"
 	tcp_plot_cwnd_and_throughput $filename $datafile
+	tcp_plot_srtt_vs_raw_rtt $filename $datafile
 }
 
 plot_files_exist()

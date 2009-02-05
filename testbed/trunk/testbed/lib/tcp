@@ -169,6 +169,7 @@ tcp_get_flow_ids()
 tcp_generate_gnuplot_index_datafile_by_flow_ids()
 {
 	local probe_file=$1
+	debug "generating gnuplot index datafile by flow ids"
 	for i in $(tcp_get_flow_ids $probe_file)
 	do
 		grep -i $i $probe_file
@@ -180,6 +181,7 @@ tcp_generate_gnuplot_index_datafile_by_flow_ids()
 tcp_generate_throughput_from_packet_sequence_numbers()
 {
 	local indexfile=$1
+	debug "generating throughput from packet sequence numbers"
 	awk --non-decimal-data '
 		BEGIN {t=-1; dt=1; }
 		{
@@ -209,11 +211,12 @@ tcp_generate_throughput_from_packet_sequence_numbers()
 
 tcp_plot_cwnd_and_throughput()
 {
-	local filename_prefix=$1
+	local filename_prefix="$1.cwnd.vs.tput"
 	local datafile=$2
 	local plot_indexed_datafile=$(create_temp_file)
 	local plot_throughput_datafile=$(create_temp_file)
 	local flow_ids=$(tcp_get_flow_ids $datafile)
+	verbose "generating cwnd and tput plot from tcpprobe log"
 	tcp_generate_gnuplot_index_datafile_by_flow_ids $datafile > $plot_indexed_datafile
 	tcp_generate_throughput_from_packet_sequence_numbers $plot_indexed_datafile > $plot_throughput_datafile
 	local j=0
@@ -242,4 +245,36 @@ tcp_plot_cwnd_and_throughput()
 	# clean
 	release_temp_file $plot_indexed_datafile
 	release_temp_file $plot_throughput_datafile
+}
+
+tcp_plot_srtt_vs_raw_rtt()
+{
+	local filename_prefix="$1.srtt.vs.raw_rtt"
+	local datafile=$2
+	local plot_indexed_datafile=$(create_temp_file)
+	local flow_ids=$(tcp_get_flow_ids $datafile)
+	verbose "generating srtt and raw rtt plot from tcpprobe log"
+	tcp_generate_gnuplot_index_datafile_by_flow_ids $datafile > $plot_indexed_datafile
+	local j=0
+	local comma=
+	local plot_command="plot"
+	for i in $flow_ids; do
+		plot_command="$plot_command $comma '$plot_indexed_datafile' index $j using $TCP_TCPPROBE_COL_TIME:$TCP_TCPPROBE_COL_SRTT with lines title 'flow $j srtt', "
+		plot_command="$plot_command '$plot_indexed_datafile' index $j using $TCP_TCPPROBE_COL_TIME:$TCP_TCPPROBE_COL_RAW_RTT with points title 'flow $j raw rtt' "
+		comma=","
+		((j++))
+	done
+
+	gnuplot <<- EOF
+		set term png size $TCP_PNG_SIZE
+		set output "$filename_prefix.png"
+		set xlabel "time (s)"
+		set ylabel "rtt (ms)"
+		set ytics nomirror
+		set xrange [0:]
+		$plot_command
+		$(plots_replot_eps $filename_prefix)
+		EOF
+	# clean
+	release_temp_file $plot_indexed_datafile
 }
