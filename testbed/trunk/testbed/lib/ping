@@ -35,7 +35,7 @@ ping_plot_rtt_in_time()
 		set title "Ping (RTT) time $plot_title"
 		set xlabel 'time (sec)'
 		set ylabel 'rtt (ms)'
-		plot "$plot_data" using 1:2
+		plot "$plot_data" using 1:2 title ''
 
 		$(plots_replot_eps $filename_prefix)
 		EOF

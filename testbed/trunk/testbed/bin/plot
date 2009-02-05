@@ -8,11 +8,8 @@ source $LIB_PATH/io
 source $LIB_PATH/configuration
 source $LIB_PATH/opts
 source $LIB_PATH/tcpdump
-source $LIB_PATH/wireless
-source $LIB_PATH/madwifi
 source $LIB_PATH/tcp
-source $LIB_PATH/iperf
-source $LIB_PATH/router
+source $LIB_PATH/ping
 source $LIB_PATH/plots
 
 # Globals
@@ -95,14 +92,17 @@ get_datafile_extention()
 
 generate_dump_image()
 {
-	local datafile=$1
+	local filename=$1
+	local datafile=$2
 	verbose "Generating tcpdump plot for $filename"
 }
 
 generate_ping_image()
 {
-	local datafile=$1
+	local filename=$1
+	local datafile=$2
 	verbose "Generating ping plot for $filename"
+	ping_plot_rtt_in_time $datafile $filename
 }
 
 generate_probe_image()
