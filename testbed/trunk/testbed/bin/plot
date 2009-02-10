@@ -126,13 +126,14 @@ plot_files_exist()
 generate_plots_for_file()
 {
 	local file=$1
+	verbose "generating plots for file: $file"
 	local ext=$(get_datafile_extention $file)
-	local datafile_uncompressed=$(io_uncompress_file $file)
 	local plot_output_dir="$(dirname $file)/$DEFAULT_PLOTS_DIR"
 	create_directory $plot_output_dir
 	local plot_filename_prefix="$plot_output_dir/$(basename $file)"
 	
 	if [[ -z $(plot_files_exist $plot_filename_prefix) || $OVERWRITE_PLOTS ]]; then
+		local datafile_uncompressed=$(io_uncompress_file $file)
 		# dispatch the right generator
 		generate_${ext}_image $plot_filename_prefix $datafile_uncompressed
 	fi
