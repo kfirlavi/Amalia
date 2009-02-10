@@ -90,6 +90,7 @@ create_temp_file()
 		error "can't create temp file"
 		exit 1
 	fi
+	debug "temporary file $file_name created"
 	echo $file_name
 }
 
@@ -97,6 +98,7 @@ create_temp_file()
 release_temp_file()
 {
 	local file=$1
+	debug "deleting temporary file $file"
 	[[ -e $file ]] && rm -f $file
 }
 
@@ -268,8 +270,8 @@ io_uncompress_file()
 {
 	local file=$1
 	local filetype=$(file $file | awk '{print $2}')
-	debug "uncompressing $filetype $file"
 	local uncompressed_file=$(create_temp_file)
+	debug "uncompressing '$filetype $file' to '$uncompressed_file'"
 	case $filetype in
 		bzip2)	bzcat $file > $uncompressed_file;;
 		gzip)	gzip -cd $file > $uncompressed_file;;
