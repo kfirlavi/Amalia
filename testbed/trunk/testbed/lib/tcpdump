@@ -441,6 +441,8 @@ tcpdump_plot_cwnd_and_throughput()
 	gnuplot <<- EOF
 		set term png size $(plots_get_plot_size)
 		set output "$filename_prefix.png"
+		$(plots_set_static_margins)
+		$(plots_pointsize_command $POINTSIZE)
 		set xlabel "time (s)"
 		set ylabel "cwnd (packets)"
 		set y2label "throughput (Mbps)"
