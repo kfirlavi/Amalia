@@ -271,7 +271,7 @@ io_uncompress_file()
 	local file=$1
 	local filetype=$(file $file | awk '{print $2}')
 	local uncompressed_file=$(create_temp_file)
-	debug "uncompressing '$filetype $file' to '$uncompressed_file'"
+	debug "uncompressing filetype: $filetype '$file' to '$uncompressed_file'"
 	case $filetype in
 		bzip2)	bzcat $file > $uncompressed_file;;
 		gzip)	gzip -cd $file > $uncompressed_file;;
