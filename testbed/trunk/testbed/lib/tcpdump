@@ -192,7 +192,7 @@ common_plot_commands_for_throughput_plots()
         local xlabel=$2
         local ylabel=$3
 	cat <<- EOF
-		set term png size $PNG_SIZE
+		set term png size $(plots_get_plot_size)
 		set title "$title"
 		set boxwidth 0.5
 		set xtics 1
@@ -356,4 +356,102 @@ tcpdump_move_dumpfile()
 	local dst=$destdir/$filename
 	remote_copy_file_from_host root $host $src $dst
 	remote_delete_file_on_host $host $src
+}
+
+tcpdump_get_uniq_ip_and_ports_from_tcpdump()
+{
+	local dumpfile=$1 # tcp dump file
+	grep -v -i "#" $dumpfile \
+		| cut -d ' ' -f 2 \
+		| sort \
+		| uniq
+}
+
+tcpdump_generate_gnuplot_index_datafile_by_flow_ids()
+{
+	local dumpfile=$1
+	local output_datafile=$2
+	[[ -e $output_datafile ]] && return
+	debug "generating gnuplot index datafile by flow ids from tcpdump"
+	for i in $(tcpdump_get_uniq_ip_and_ports_from_tcpdump $dumpfile)
+	do
+		grep -i $i $dumpfile
+		echo -e '\n\n'
+	done \
+		| $IO_COMPRESS_COMMAND > $output_datafile
+}
+
+tcpdump_get_start_time()
+{
+	local dumpfile=$1
+	grep -v -i "#" $dumpfile \
+		| head -n 1 \
+		| cut -d ' ' -f 1
+}
+
+tcpdump_generate_tput_plot_data()
+{
+	local cwnd_plot_data=$1
+	# get throughput from packet sequence numbers in tcpdump
+	awk --non-decimal-data \
+		'BEGIN {t=-1; dt=1; } {
+			if (NF < 3) 
+				printf "\n\n"; 
+			else {
+				seq=$4; 
+				if (t<0 || t>$1) {
+					t=$1; 
+					lastseq=seq; 
+					print $1, 0
+				}; 
+				if ($1-t >= dt) {
+					print $1, (seq-lastseq)*8/1024/1024/($1-t); 
+					t=$1; 
+					lastseq=seq
+				}; 
+			} 
+		}' $cwnd_plot_data
+}
+
+tcpdump_plot_cwnd_and_throughput()
+{
+	local filename_prefix=$1
+	local datafile=$2 #tcpdump log
+	local plot_indexed_datafile=$filename_prefix.gnuplot.index.file.by.flow.ids
+	local plot_throughput_datafile=$filename_prefix.tput.data
+	local filename_prefix="$filename_prefix.cwnd.vs.tput"
+	local flow_ids=$(tcpdump_get_uniq_ip_and_ports_from_tcpdump $datafile)
+	verbose "generating cwnd and tput plot from tcpdump log"
+	tcpdump_generate_gnuplot_index_datafile_by_flow_ids $datafile $plot_indexed_datafile
+	local plot_indexed_datafile_unzipped=$(io_uncompress_file $plot_indexed_datafile)
+	local tput_indexed_file=$(create_temp_file)
+	tcpdump_generate_tput_plot_data $plot_indexed_datafile_unzipped > $tput_indexed_file
+	local starttime=$(tcpdump_get_start_time $datafile)
+	local j=0
+	local comma=
+	local plot_command="plot"
+	for i in $flow_ids; do
+		plot_command="$plot_command $comma '$plot_indexed_datafile_unzipped' index $j using (\$1-$starttime):(\$3/1448) with lines title 'flow $j cwnd', "
+		plot_command="$plot_command '$tput_indexed_file' index $j using (\$1-$starttime):2 with points axes x1y2 title 'flow $j tput' "
+		comma=","
+		((j++))
+	done
+
+	debug "plot_command: $plot_command"
+	gnuplot <<- EOF
+		set term png size $(plots_get_plot_size)
+		set output "$filename_prefix.png"
+		set xlabel "time (s)"
+		set ylabel "cwnd (packets)"
+		set y2label "throughput (Mbps)"
+		set ytics nomirror
+		set y2range [0:]
+		set y2tics
+		set xrange [0:]
+		$plot_command
+		$(plots_replot_eps $filename_prefix)
+		EOF
+	#clean
+	release_temp_file $plot_indexed_datafile_unzipped
+	release_temp_file $tput_indexed_file
 }

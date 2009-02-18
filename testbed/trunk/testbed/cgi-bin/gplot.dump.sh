@@ -6,6 +6,7 @@ LIB_PATH="$(dirname $0)/../lib"
 source $LIB_PATH/io
 source $LIB_PATH/cgi
 source $LIB_PATH/plots
+source $LIB_PATH/tcpdump
 
 # plot cwnd data reconstructed from tcpdump 
 input_file=$PATH_TRANSLATED
@@ -55,23 +56,6 @@ set_style()
 	fi
 }
 
-get_start_time()
-{
-	local tcpdump=$1
-	grep -v -i "#" $TCPDUMP_FILE \
-		| head -n 1 \
-		| cut -d ' ' -f 1
-}
-
-get_uniq_ip_and_ports_from_tcpdump()
-{
-	local dumpfile=$1 # tcp dump file
-	grep -v -i "#" $dumpfile \
-		| cut -d ' ' -f 2 \
-		| sort \
-		| uniq
-}
-
 generate_gnuplot_command_of_cwnd_tput_plot()
 {
 	local tcpdump_file=$1
@@ -80,7 +64,7 @@ generate_gnuplot_command_of_cwnd_tput_plot()
 	local comma=
 	local plot_command='plot ' 
 	local j=0
-	for i in $(get_uniq_ip_and_ports_from_tcpdump $tcpdump_file); do
+	for i in $(tcpdump_get_uniq_ip_and_ports_from_tcpdump $tcpdump_file); do
 		grep -i $i $tcpdump_file >> $cwnd_plot_data
 		echo -e '\n\n' >> $cwnd_plot_data
 		plot_command="$plot_command $comma '$cwnd_plot_data' index $j u (\$1-$starttime):(\$3/1448) with $STYLE title 'flow $j cwnd' "
@@ -125,42 +109,18 @@ generate_ping_plot_command()
 	echo $ping_plot_command
 }
 
-generate_tput_plot_data()
-{
-	local cwnd_plot_data=$1
-	# get throughput from packet sequence numbers in tcpdump
-	awk --non-decimal-data \
-		'BEGIN {t=-1; dt=1; } {
-			if (NF < 3) 
-				printf "\n\n"; 
-			else {
-				seq=$4; 
-				if (t<0 || t>$1) {
-					t=$1; 
-					lastseq=seq; 
-					print $1, 0
-				}; 
-				if ($1-t >= dt) {
-					print $1, (seq-lastseq)*8/1024/1024/($1-t); 
-					t=$1; 
-					lastseq=seq
-				}; 
-			} 
-		}' $cwnd_plot_data
-}
-
 main()
 {
 	get_query_string_params
 	set_format
 	set_style
-	starttime=$(get_start_time $TCPDUMP_FILE)
+	starttime=$(tcpdump_get_start_time $TCPDUMP_FILE)
 	echo Content-type: $MIME 
 	echo ""
 	cwnd_plot_data=$(create_temp_file)
 	tput_plot_data=$(create_temp_file)
 	plot=$(generate_gnuplot_command_of_cwnd_tput_plot $TCPDUMP_FILE $cwnd_plot_data $tput_plot_data)
-	generate_tput_plot_data $cwnd_plot_data > $tput_plot_data
+	tcpdump_generate_tput_plot_data $cwnd_plot_data > $tput_plot_data
 	title1=$(get_title_from_dumpfile $TCPDUMP_FILE 1)
 	title2=$(get_title_from_dumpfile $TCPDUMP_FILE 2)
 	ping_plot_command=$(generate_ping_plot_command)
@@ -290,7 +250,7 @@ generate_cwnd_plot()
 	local cwnd_plot_data=$(create_temp_file)
 	local tput_plot_data=$(create_temp_file)
 	local plot_command=$(generate_gnuplot_command_of_cwnd_tput_plot $tcpdump_file $cwnd_plot_data $tput_plot_data)
-	generate_tput_plot_data $cwnd_plot_data > $tput_plot_data
+	tcpdump_generate_tput_plot_data $cwnd_plot_data > $tput_plot_data
 
 	gnuplot <<- EOF
 		set terminal $FORMAT  
@@ -340,9 +300,20 @@ case "$SINGLEPLOT" in
 		multi_plot;
 		;;
 esac
+cat <<- EOF > /tmp/kfir
+TCPDUMP_FILE    $TCPDUMP_FILE 
+rtt             $rtt 
+rttfile         $rttfile
+iperf           $iperf 
+cwnd_plot_data  $cwnd_plot_data 
+tput_plot_data  $tput_plot_data
+rtt_plot_data   $rtt_plot_data
+iperf_plot_data $iperf_plot_data
+EOF
 
 release_temp_file $TCPDUMP_FILE 
 release_temp_file $rtt 
+release_temp_file $rttfile
 release_temp_file $iperf 
 release_temp_file $cwnd_plot_data 
 release_temp_file $tput_plot_data
