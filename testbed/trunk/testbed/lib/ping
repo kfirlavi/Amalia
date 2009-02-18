@@ -32,10 +32,11 @@ ping_plot_rtt_in_time()
 	gnuplot <<- EOF
 		set term png size $(plots_get_plot_size)
 		set output "$filename_prefix.png"
-		set title "Ping (RTT) time $plot_title"
+		$(plots_set_static_margins)
+		set title "RTT from ping log $plot_title"
 		set xlabel 'time (sec)'
 		set ylabel 'rtt (ms)'
-		plot "$plot_data" using 1:2 title ''
+		plot "$plot_data" using 1:2 with lines title ''
 
 		$(plots_replot_eps $filename_prefix)
 		EOF
