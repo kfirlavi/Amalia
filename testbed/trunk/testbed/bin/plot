@@ -31,6 +31,7 @@ usage()
 		OPTIONS:
 			-f	datafile - tcpdump, tcpprobe, ping ...
 			-d	generate plots for all the data files supported found in the directory
+			-e	use every N data point, when generating gnuplot image.
 			-n	force overwrite of plots.
 			-h	Show this message
 			-v 	verbose
@@ -40,10 +41,11 @@ usage()
 
 get_opts()
 {
-	while getopts "t:d:f:nvhx" options; do
+	while getopts "t:d:e:f:nvhx" options; do
 		case $options in
 			f) DATAFILE=$OPTARG;;
 			d) DIRECTORY=$OPTARG;;
+			e) GNUPLOT_SKIP_DATA_POINTS=$OPTARG;;
 			n) OVERWRITE_PLOTS=1;;
 			v) VERBOSE=1;;
 			x) DEBUG=1;;
@@ -71,6 +73,7 @@ process_options()
 	check_for_required_opts
 	[[ ! -z $DATAFILE ]] && io_exit_if_path_is_not_valid $DATAFILE
 	[[ ! -z $DIRECTORY ]] && io_exit_if_directory_is_not_valid $DIRECTORY
+	[[ -n $GNUPLOT_SKIP_DATA_POINTS ]] && PLOTS_GNUPLOT_SKIP_DATA_POINTS=$GNUPLOT_SKIP_DATA_POINTS
 }
 
 get_datafile_extention()
@@ -96,6 +99,7 @@ generate_dump_image()
 	local filename=$1
 	local datafile=$2
 	verbose "Generating tcpdump plot for $filename"
+	tcpdump_plot_cwnd_and_throughput $filename $datafile
 }
 
 generate_ping_image()
