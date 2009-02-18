@@ -10,6 +10,11 @@ PLOTS_EPS_WHITE_BLACK_PLOT_SUFFIX=bw.eps
 PLOTS_EPS_COLOR_PLOT_SUFFIX=color.eps
 PLOTS_PLOT_DATAFILE_SUFFIX=data
 PLOTS_DEFAULT_POINTSIZE=1
+PLOTS_LEFT_MARGINE=10
+PLOTS_RIGHT_MARGINE=10
+PLOTS_UP_MARGINE=4
+PLOTS_DOWN_MARGINE=4
+PLOTS_GNUPLOT_SKIP_DATA_POINTS=1 # this is the default. Use all the points in the datafile
 
 plots_generate_index_file()
 {
@@ -90,3 +95,23 @@ plots_pointsize_command()
 	echo "set pointsize $size"
 }
 
+plots_set_static_margins()
+{
+	cat <<- EOF
+		set lmargin $PLOTS_LEFT_MARGINE
+		set bmargin $PLOTS_DOWN_MARGINE
+		set rmargin $PLOTS_RIGHT_MARGINE
+		set tmargin $PLOTS_UP_MARGINE
+	EOF
+}
+
+# add this function for skipping datapoints. This will reduce the size of the eps file. 
+# example orginal: plot 'datafile' index 4 every 10 using 3:5
+# example: plot 'datafile' index 4 $(plots_skip_points) using 3:5
+plots_skip_points()
+{
+	local mult=$1
+	local skip=$PLOTS_GNUPLOT_SKIP_DATA_POINTS
+	[[ -n $mult ]] && skip=$(echo "$mult * $PLOTS_GNUPLOT_SKIP_DATA_POINTS" | bc)
+	echo "every $skip"
+}
