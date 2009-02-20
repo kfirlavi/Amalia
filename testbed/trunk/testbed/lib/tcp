@@ -12,6 +12,7 @@ TCP_CLIENT_PROBE_LOG_FILE=/tmp/tcpporbe
 TCP_TCPPROBE_PROC_FILE=/proc/net/tcpprobe
 TCP_TCPPROBE_LOG_SUFFIX=.tcpprobe
 TCP_CONGESTION_CONTROL_PROC_FILE=/proc/sys/net/ipv4/tcp_congestion_control
+TCP_ABC_PROC_FILE=/proc/sys/net/ipv4/tcp_abc
 TCP_TCPPROBE_DEFAULT_PARAM_FULL=1
 TCP_WINDOW="10m" # default 10 MB window
 #TCP_PNG_SIZE="400,300"
@@ -41,6 +42,13 @@ tcp_change_ca_algorithm_on_client()
 	[[ $algorithm != "reno" ]] \
 		&& remote_load_kernel_module_on_client $host $module
 	remote_run_command_on_client root $host "echo $algorithm > $TCP_CONGESTION_CONTROL_PROC_FILE"
+}
+
+tcp_use_abc_on_client()
+{
+	local host=$1
+	verbose "Using congestion abc method on $host"
+	remote_run_command_on_client root $host "echo 1 > $TCP_ABC_PROC_FILE"
 }
 
 tcp_start_tcpprobe_logging()

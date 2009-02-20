@@ -43,13 +43,14 @@ remote_check_if_module_is_loaded()
 {
 	local host=$1
 	local module=$2
-	local ret=$(remote_run_command_on_client root $host "lsmod | grep $module")
-	if [[ -z $ret ]]; then
+	local ret=$(remote_run_command_on_client root $host "lsmod | grep $module" 2>&1 /dev/null)
+	if [[ -z $ret ]]
+	then
 		debug "module $module is not loaded on $host"
-		echo
 	else
-		echo yes
+		debug "module $module already loaded on $host"
 	fi
+	echo $ret
 }
 
 remote_copy_file_to_host()
