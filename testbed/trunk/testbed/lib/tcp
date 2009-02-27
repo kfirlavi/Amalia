@@ -33,22 +33,54 @@ TCP_TCPPROBE_COL_SEQ=11
 TCP_TCPPROBE_COL_ACK_SEQ=12
 TCP_TCPPROBE_COL_RAW_RTT=13
 
+# the vista client should run Cygwin
+tcp_check_if_client_is_windows_vista()
+{
+	local host=$1
+	[[ ! -z $(remote_run_command_on_client root $host "uname | grep CYGWIN") ]] \
+		&& echo yes
+}
+
+tcp_change_ca_algorithm_on_vista_client()
+{
+	local algorithm=$1 # compound, reno
+	local host=$2
+	if [[ $algorithm == "compound" ]]; then
+		algorithm=ctcp
+		verbose "enabeling compound tcp on vista $host"
+	else
+		if [[ $algorithm != "reno" ]]; then
+			error "$host is Vista and do not support $algorithm. Changing to default reno algorithm"
+		fi
+		verbose "enabeling reno on vista $host"
+		algorithm=none
+	fi
+	remote_run_command_on_client root $host "netsh interface tcp set global congestionprovider=$algorithm" 2>&1 > /dev/null
+}
+
 tcp_change_ca_algorithm_on_client()
 {
 	local algorithm=$1
 	local host=$2
 	local module="tcp_$algorithm"
 	verbose "loading congestion algorithm: $algorithm on $host"
-	[[ $algorithm != "reno" ]] \
-		&& remote_load_kernel_module_on_client $host $module
-	remote_run_command_on_client root $host "echo $algorithm > $TCP_CONGESTION_CONTROL_PROC_FILE"
+	if [[ $(tcp_check_if_client_is_windows_vista $host) == "yes" ]]; then
+		tcp_change_ca_algorithm_on_vista_client $algorithm $host
+	else
+		[[ $algorithm != "reno" ]] \
+			&& remote_load_kernel_module_on_client $host $module
+		remote_run_command_on_client root $host "echo $algorithm > $TCP_CONGESTION_CONTROL_PROC_FILE"
+	fi
 }
 
 tcp_use_abc_on_client()
 {
 	local host=$1
-	verbose "Using congestion abc method on $host"
-	remote_run_command_on_client root $host "echo 1 > $TCP_ABC_PROC_FILE"
+	# don't enable abc on vista
+	if [[ -z $(tcp_check_if_client_is_windows_vista $host) ]]; then
+		verbose "Using congestion abc method on $host"
+		remote_run_command_on_client root $host "echo 1 > $TCP_ABC_PROC_FILE"
+	fi
 }
 
 tcp_start_tcpprobe_logging()
