@@ -264,12 +264,18 @@ io_check_if_file_exsist()
 	fi
 }
 
+io_get_file_type()
+{
+	local file=$1
+	file $file | awk '{print $2}'
+}
+
 # this function returns tempfile with the content uncompressed. 
 # you should release this file, when you finish with it.
 io_uncompress_file()
 {
 	local file=$1
-	local filetype=$(file $file | awk '{print $2}')
+	local filetype=$(io_get_file_type $file)
 	local uncompressed_file=$(create_temp_file)
 	debug "uncompressing filetype: $filetype '$file' to '$uncompressed_file'"
 	case $filetype in
