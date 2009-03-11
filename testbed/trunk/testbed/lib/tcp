@@ -17,6 +17,9 @@ TCP_TCPPROBE_DEFAULT_PARAM_FULL=1
 TCP_WINDOW="10m" # default 10 MB window
 #TCP_PNG_SIZE="400,300"
 TCP_PNG_SIZE="800,600"
+TCP_PLOT_RTT_STYLE=points
+TCP_PLOT_CWND_STYLE=points
+TCP_PLOT_TPUT_STYLE=points
 
 # Columns position in tcpprobe file
 TCP_TCPPROBE_COL_TIME=1
@@ -274,8 +277,8 @@ tcp_plot_cwnd_and_throughput()
 	local comma=
 	local plot_command="plot"
 	for i in $flow_ids; do
-		plot_command="$plot_command $comma '$plot_indexed_datafile_unzipped' index $j $(plots_skip_points) using $TCP_TCPPROBE_COL_TIME:$TCP_TCPPROBE_COL_SND_CWND with lines title 'flow $j cwnd', "
-		plot_command="$plot_command '$plot_throughput_datafile_unzipped' index $j $(plots_skip_points) using 1:2 with points axes x1y2 title 'flow $j tput' "
+		plot_command="$plot_command $comma '$plot_indexed_datafile_unzipped' index $j $(plots_skip_points) using $TCP_TCPPROBE_COL_TIME:$TCP_TCPPROBE_COL_SND_CWND with $TCP_PLOT_CWND_STYLE title 'flow $j cwnd', "
+		plot_command="$plot_command '$plot_throughput_datafile_unzipped' index $j $(plots_skip_points) using 1:2 with $TCP_PLOT_TPUT_STYLE axes x1y2 title 'flow $j tput' "
 		comma=","
 		((j++))
 	done
@@ -315,8 +318,8 @@ tcp_plot_srtt_vs_raw_rtt()
 	local comma=
 	local plot_command="plot"
 	for i in $flow_ids; do
-		plot_command="$plot_command $comma '$plot_indexed_datafile_unzipped' index $j $(plots_skip_points $reduce_factor) using $TCP_TCPPROBE_COL_TIME:$TCP_TCPPROBE_COL_SRTT with lines title 'flow $j srtt', "
-		plot_command="$plot_command '$plot_indexed_datafile_unzipped' index $j $(plots_skip_points $reduce_factor) using $TCP_TCPPROBE_COL_TIME:$TCP_TCPPROBE_COL_RAW_RTT with points title 'flow $j raw rtt' "
+		plot_command="$plot_command $comma '$plot_indexed_datafile_unzipped' index $j $(plots_skip_points $reduce_factor) using $TCP_TCPPROBE_COL_TIME:$TCP_TCPPROBE_COL_SRTT with $TCP_PLOT_RTT_STYLE title 'flow $j srtt', "
+		plot_command="$plot_command '$plot_indexed_datafile_unzipped' index $j $(plots_skip_points $reduce_factor) using $TCP_TCPPROBE_COL_TIME:$TCP_TCPPROBE_COL_RAW_RTT with $TCP_PLOT_RTT_STYLE title 'flow $j raw rtt' "
 		comma=","
 		((j++))
 	done

@@ -10,6 +10,7 @@ source $LIB_PATH/remote
 # Globals
 PING_TIME_COL=7
 PING_REMOTE_LOGGING_FILE=/tmp/ping
+PING_PLOT_RTT_STYLE=lines
 
 ping_generate_data_for_rtt_plot()
 {
@@ -33,10 +34,11 @@ ping_plot_rtt_in_time()
 		set term png size $(plots_get_plot_size)
 		set output "$filename_prefix.png"
 		$(plots_set_static_margins)
+		$(plots_pointsize_command $POINTSIZE)
 		set title "RTT from ping log $plot_title"
 		set xlabel 'time (sec)'
 		set ylabel 'rtt (ms)'
-		plot "$plot_data" using 1:2 with lines title ''
+		plot "$plot_data" using 1:2 with $PING_PLOT_RTT_STYLE title ''
 
 		$(plots_replot_eps $filename_prefix)
 		EOF

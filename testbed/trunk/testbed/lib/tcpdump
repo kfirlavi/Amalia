@@ -17,6 +17,8 @@ MAX_PACKETS_SEND=0
 PNG_SIZE="400,300"
 TCPDUMP_CLIENTS_DUMPFILE_DIRECTORY="/tmp"
 TCPDUMP_CLIENTS_DUMPFILE_SUFFIX=".tcpdump"
+TCPDUMP_PLOT_CWND_STYLE=lines
+TCPDUMP_PLOT_TPUT_STYLE=points
 
 # will search the tcpdump file for the time that the last station started to send
 # then we can consider the experiment as started
@@ -431,8 +433,8 @@ tcpdump_plot_cwnd_and_throughput()
 	local comma=
 	local plot_command="plot"
 	for i in $flow_ids; do
-		plot_command="$plot_command $comma '$plot_indexed_datafile_unzipped' index $j using (\$1-$starttime):(\$3/1448) with lines title 'flow $j cwnd', "
-		plot_command="$plot_command '$tput_indexed_file' index $j using (\$1-$starttime):2 with points axes x1y2 title 'flow $j tput' "
+		plot_command="$plot_command $comma '$plot_indexed_datafile_unzipped' index $j using (\$1-$starttime):(\$3/1448) with $TCPDUMP_PLOT_CWND_STYLE title 'flow $j cwnd', "
+		plot_command="$plot_command '$tput_indexed_file' index $j using (\$1-$starttime):2 with $TCPDUMP_PLOT_TPUT_STYLE axes x1y2 title 'flow $j tput' "
 		comma=","
 		((j++))
 	done
