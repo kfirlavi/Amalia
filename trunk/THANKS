@@ -1,0 +1,19 @@
+This work was done as part of my MS.c researching congestion control algorithms at the Hamilton Institute at the National University of Ireland.
+
+This project was based on the work of:
+Prof. Douglas Leith
+Baruch Even
+Stephen Hemminger
+Gavin McCullagh
+
+Which led to the initial commits of the repository. 
+
+Next is a dear friend Ian Dangerfield, which contributed to the madwifi patches, and mentored me in my research.
+
+And the last but not least is David Malone that was helping with all his heart and endless knowledge, to develop the hardest parts of the code ;) tnx
+
+
+Regards,
+Kfir Lavi <lavi.kfir@gmail.com>
+
+B.T.W all people mentioned above and their work can be found at: http://www.hamilton.ie/people
