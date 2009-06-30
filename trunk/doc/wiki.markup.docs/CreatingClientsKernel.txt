@@ -1,0 +1,49 @@
+= Creating Clients Kernel =
+ 1. Get the testbed scripts to your home directory
+{{{
+svn checkout http://sauron/svn-repos/testbed/trunk/testbed
+}}}
+ 1. Download the kernel configurations from the repository
+{{{
+svn checkout http://sauron/svn-repos/kernels/trunk/kernels
+}}}
+ 1. Get the kernel version you need:
+{{{
+VERSION=2.6.23 && mkdir $VERSION && cd $VERSION && ketchup -G $VERSION
+}}}
+ 1.  Save the soekris related file in .config file under kernels directory. 
+{{{
+ cp ~/kernels/config/ltsp/2.6.25-rc8/config-ltsp-kernel-2.6.25-rc8-soekris-4801 ~/kernels/2.6.25-rc8/.config
+}}}
+ 1. compile the kernel
+{{{
+cd ~/kernels/2.6.25-rc8/
+make menuconfig 
+}}}
+    you need to exit and when it asks you if to save the config file, say Yes. 
+{{{
+make
+}}}
+ 1. Get the madwifi related files using svn.
+{{{
+   svn checkout http://sauron/svn-repos/madwifi
+}}} 
+ 1. Compile madwifi.
+{{{ 
+cd ~/kernels/madwifi/madwifi-0.9.4
+make KERNELPATH=~/kernels/2.6.25-rc8/
+}}}
+ 1. You will need to install sudo
+{{{
+aptitude install sudo
+}}}
+    Then edit as root the sudoers file with the command {{{viduso}}}, and add this line to the file:
+{{{
+USER    ALL= /home/USER/testbed/bin/cpkrn2tftpdir
+USER    ALL= /home/USER/testbed/bin/arp.file.gen
+}}}
+    Change USER to be your user name. 
+ 1. Install the kernel to the Ltsp root directory and generate a kernel and initrd for pxe loading.
+{{{
+sudo /home/ashwin/testbed/bin/cpkrn2tftpdir -k kernels/2.6.25-rc8/ -m kernels/madwifi/madwifi-0.9.4/
+}}}

@@ -1,0 +1,42 @@
+= Dummynet Freebsd Router Setup =
+
+Create the dummynet router. [[BR]]
+Download the files:
+  * attachment:freebsd4.root.nfs.tar.gz 
+  * attachment:freebsd4.tftp.tar.gz
+  * attachment:networking.patch
+ and open them like this:
+{{{
+tar xvzf /tmp/freebsd4.root.nfs.tar.gz -C /
+tar xvzf /tmp/freebsd4.tftp.tar.gz -C /
+cd /opt/freebsd4
+patch -p1 < /tmp/networking.patch
+}}}
+ 1. Now edit {{{/opt/freebsd4/etc/fstab}}} and change the line:
+{{{
+10.220.3.218:/opt/freebsd4/i386 /          nfs     ro              0       0
+}}}
+ to
+{{{
+192.168.1.254:/opt/freebsd4/i386 /          nfs     ro              0       0
+}}}
+ 1. Add the following line to {{{/etc/exports}}}:
+{{{
+/opt/freebsd4/i386   router(ro,no_root_squash,async)
+}}}
+ and then run the command:
+{{{
+invoke-rc.d nfs-kernel-server reload
+}}}
+
+== SSH keys ==
+By now you should have created personal key here: [wiki:TestbedFromScratch/LtspSetup#SSHonclients][[BR]]
+You should copy your key to {{{/opt/freebsd4/i386/root/.ssh/authorized_keys}}}
+{{{
+cp .ssh/id_rsa.pub /opt/ltsp/i386/root/.ssh/authorized_keys
+}}}
+This will erase the content of the file. [[BR]]
+To add another users key do:
+{{{
+cat .ssh/id_rsa.pub >> /opt/ltsp/i386/root/.ssh/authorized_keys
+}}}

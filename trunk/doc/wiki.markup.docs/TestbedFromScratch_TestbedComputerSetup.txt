@@ -1,0 +1,330 @@
+= Testbed Computer Setup =
+This computer is the heart of all the testbed. From here you will run your tests, develop your scripts, compile kernels and save the test results.[[BR]]
+You will need to have regular user account and from there you will work. This lets few people work together on the testbed and each user will have its own testing scripts, kernels etc. 
+== Install basic stable (currently etch) Debian system. ==
+ 1. You can just download and burn the image:
+{{{
+ftp://ftp.ie.debian.org/debian/dists/etch/main/installer-i386/current/images/netboot/mini.iso
+}}}
+    And then change the boot sequence in the BIOS to boot the cdrom first.  [[BR]]
+    Note: In the installation deselect the Desktop Environment
+ 1. To get ssh access to the computer you installed, just login and install the ssh server:
+{{{
+aptitude install openssh-server
+}}}
+ 1. SSH to your server and install those packages:
+{{{
+aptitude install ltsp-utils ltsp-server apache2 gnuplot less ketchup build-essential libncurses5-dev \
+                 vim-full cscope exuberant-ctags openntpd screen dnsmasq tcpdump nmap subversion \
+                 wireless-tools syslog-ng gawk
+}}}
+
+== Misc setup ==
+ 1. Uncoment the lines in {{{/root/.bashrc}}} to add some aliases for working with colors and warning before deleting something:
+{{{
+export LS_OPTIONS='--color=auto'
+eval "`dircolors`"
+alias ls='ls $LS_OPTIONS'
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+}}}
+ 1. You need two ethernet cards, and edit {{{/etc/network/interfaces}}}:
+{{{
+# testbed internal network
+allow-hotplug eth0
+iface eth0 inet static
+        address 192.168.1.1
+        netmask 255.255.255.0
+
+# Outside access to the testbed
+allow-hotplug eth1
+iface eth1 inet dhcp
+}}}
+ You will need to replace eth1 and eth0 in your setup, depend on the cards. If you have one card 100 and one 1000, put the 1000 inside the testbed, ie. eth0. The outside interface is just for control and can be 100.
+
+== nfs server ==
+ 1. Add the line to the file {{{/etc/exports}}}:
+{{{
+/opt/ltsp       *(ro,no_root_squash,async)
+}}}
+ 1. restart nfs service:
+{{{
+/etc/init.d/nfs-kernel-server restart
+}}}
+ 1. To verify that /opt/ltsp is exported, run {{{exportfs}}}.
+
+== dnsmasq ==
+ 1. Create entries in the {{{/etc/hosts}}}:
+{{{
+cat << EOF > /tmp/hosts
+# Testbed servers
+192.168.1.254 testbed2
+192.168.1.250 router
+192.168.3.250 192.168.4.250 wrouter
+192.168.1.251 src
+192.168.3.251 wsrc
+192.168.1.252 ap
+192.168.2.252 192.168.4.252 wap
+192.168.1.253 apc
+
+# Testbed clients
+EOF
+for i in `seq 1 249`; do for y in 1 2 ; do if [[ $y == 1 ]]; then W= ; else W=w ; fi; echo "192.168.$y.$i ${W}client$i" ;done ; echo ; done >> /tmp/hosts
+cat /tmp/hosts >> /etc/hosts
+}}}
+ 1. Edit {{{/etc/dnsmasq.conf}}} to be similar to this:
+{{{
+dhcp-authoritative
+interface=eth0
+
+# enable dhcp on the 192.168.1 network, but only for configured hosts
+dhcp-range=192.168.1.0,static
+
+# rootpath option
+dhcp-option=net:ltsp,17,/opt/ltsp/i386
+dhcp-option=net:bsd,17,/opt/freebsd4/i386
+
+# define common netboot types 
+dhcp-vendorclass=etherboot,Etherboot
+dhcp-vendorclass=pxe,PXEClient
+
+# Set the boot filename for BOOTP. 
+dhcp-boot=net:pxe,/ltsp/i386/pxelinux.0
+dhcp-boot=net:etherboot,/ltsp/i386/nbi.img
+dhcp-boot=net:bsd,/freebsd4/i386/pxeboot
+
+# servers configuration
+dhcp-host=00:07:e9:19:eb:b2,router,192.168.1.250,infinite,net:bsd
+#dhcp-host=00:00:00:00:00:00,wrouter,192.168.2.250,infinite,net:bsd
+
+#dhcp-host=00:00:00:00:00:00,src,192.168.1.251,infinite,net:ltsp
+#dhcp-host=00:00:00:00:00:00,wsrc,192.168.2.251,infinite,net:ltsp
+
+#dhcp-host=00:00:00:00:00:00,ap,192.168.1.252,infinite,net:ltsp
+#dhcp-host=00:00:00:00:00:00,wap,192.168.2.252,infinite,net:ltsp
+
+
+# client configuration
+dhcp-host=00:00:24:C8:6E:54,client1,192.168.1.1,infinite,net:ltsp
+#dhcp-host=00:00:00:00:00:00,wclient1,192.168.2.1,infinite,net:ltsp
+
+dhcp-host=00:00:24:C8:03:E8,client2,192.168.1.2,infinite,net:ltsp
+#dhcp-host=00:00:00:00:00:00,wclient2,192.168.2.2,infinite,net:ltsp
+}}}
+ You can consult this example for adding stuff http://www.thekelleys.org.uk/dnsmasq/docs/dnsmasq.conf.example
+ 1. Then run this script to populate the rest of the network:
+{{{
+for i in `seq 1 249`; do for y in 1 2 ; do if [[ $y == 1 ]]; then W= ; else W=w ; fi; echo "#dhcp-host=00:00:00:00:00:00,${W}client$i,192.168.$y.$i,infinite,net:ltsp" ;done ; echo ; done >> /etc/dnsmasq.conf
+}}}
+
+== LTSP setup ==
+ * [wiki:TestbedFromScratch/LtspSetup LTSP Setup]
+== tftp-hpa ==
+ 1. Edit {{{/etc/default/tftpd-hpa}}} and change {{{RUN_DAEMON="no"}}} to {{{RUN_DAEMON="yes"}}}
+ 1. start tftp server {{{/etc/init.d/tftpd-hpa start}}}
+ 1. Populate the links in {{{/var/lib/tftpboot/ltsp/i386/pxelinux.cfg}}}:
+{{{
+cd /var/lib/tftpboot/ltsp/i386/pxelinux.cfg
+ln -fs ap `gethostip -x  192.168.1.252`
+ln -fs src `gethostip -x  192.168.1.251`
+for i in `seq 1 249`; do ln -sf clients `gethostip -x 192.168.1.$i`; done
+}}}
+ NOTE: The real files {{{ap,src,clients}}} will be created after you compile a kernel and install it with [source:testbed/trunk/testbed/bin/cpkrn2tftpdir cpkrn2tftpdir]
+
+== Logging ==
+ 1. To understand what I'm doing you can look here http://www.ltsp.org/twiki/bin/view/Ltsp/Syslog
+ 1. Append this code to the file {{{/etc/syslog-ng/syslog-ng.conf}}}
+{{{
+#  If you wish to get logs from remote machine you will need this server
+# to listen upon port 514.
+#
+source remote { udp(); };
+
+#
+# Automatic host sorting
+# Store all files beneath '/var/log/NAME OF MACHINE/facility
+# Create these directories if required, with the given permissions.
+#
+destination hosts { file("/var/log/testbed2/$HOST/$FACILITY.log" owner(root)
+  group(root) perm(0600) dir_perm(0700) create_dirs(yes)); };
+
+#
+# log by host (as defined above) anything that's coming from the
+# remote socket.
+#
+log { source(remote); destination(hosts); };
+}}}
+ 1. Restart syslog-ng
+{{{
+ /etc/init.d/syslog-ng restart
+}}}
+
+== Securing the system ==
+ 1. Lets install a firewall:
+{{{
+aptitude install shorewall
+}}}
+ 1. Copy the example files of two interfaces:
+{{{
+cp -i /usr/share/doc/shorewall/examples/two-interfaces/* /etc/shorewall/
+cd /etc/shorewall/
+for i in *gz; do gunzip $i; done
+}}}
+ 1. Edit {{{/etc/shorewall/interfaces}}} so that eth0 is local and eth1 is net. This depends on your configuration in {{{/etc/network/interfaces}}}. Also delete the {{{norfc1918}}} option. For eth0 which is local, add the option {{{dhcp}}}, so the firewall will let it act as a dhcp server. 
+ 1. Delete the file {{{/etc/shorewall/masq}}} 
+ 1. Edit {{{/etc/shorewall/policy}}} The line 
+{{{
+loc           net             ACCEPT
+}}} 
+  Should change to {{{REJECT}}}. This is because we don't want the stations to go out to the net without special rule. So if you want to let them go out by iperf then enable a rule in the rules file. 
+ 1. Add to {{{/etc/shorewall/rules}}} this rules:
+{{{
+#############################################################################################################
+#ACTION		SOURCE		DEST		PROTO	DEST	SOURCE		ORIGINAL	RATE		USER/
+#							PORT	PORT(S)		DEST		LIMIT		GROUP
+#								PORT	PORT(S) DEST			LIMIT	GROUP
+#
+#	Accept DNS connections from the firewall to the network
+#
+DNS/ACCEPT	$FW		net
+#
+#	Accept HTTP connections from the firewall to the network
+#
+HTTP/ACCEPT	$FW		net:ftp.ie.debian.org,security.debian.org,10.220.2.92,ftp.kernel.org,heanet.dl.sourceforge.net
+#
+#	Accept NTP connections from the firewall to the network
+#
+NTP/ACCEPT	$FW		net
+#
+#	Accept NFS connections from the local network to mount the root fs
+#
+ACCEPT		loc		$FW	tcp	sunrpc,796,nfs,kerberos_master,854,723,773,899,951
+ACCEPT		loc		$FW	udp	sunrpc,713,748,nfs,851,703,imaps,858,720,770,948,896
+#
+#	Accept SYSLOG logging from the local network in the server
+#
+ACCEPT		loc		$FW	udp	syslog
+#
+#	Accept TFTP connections from the local network for PXE booting
+#
+ACCEPT		loc		$FW	udp	tftp
+#
+#	Accept TELNET connection from the testbed server (firewall) to  the APC power grid
+#
+ACCEPT		$FW		net:192.168.1.253	tcp	telnet
+#
+#	Accept SSH connections from the testbed server (firewall) to  the local network
+#
+SSH/ACCEPT	$FW		loc
+#
+#	Accept SSH connections from the local network for administration
+#
+SSH/ACCEPT	loc		$FW
+#
+#	Accept SSH connections from specific computers in the network that suppose to work on this testbed
+#
+SSH/ACCEPT	net:10.220.2.91	$FW
+#
+#	Allow Ping from the local network
+#
+Ping/ACCEPT	loc		$FW
+
+#
+# Reject Ping from the "bad" net zone.. and prevent your log from being flooded..
+#
+
+Ping/REJECT	net		$FW
+
+ACCEPT		$FW		loc		icmp
+ACCEPT		$FW		net		icmp
+#
+
+#LAST LINE -- ADD YOUR ENTRIES BEFORE THIS ONE -- DO NOT REMOVE
+}}}
+ 1. Edit {{{/etc/default/shorewall}}} and change startup=0 to 1, so shorewall will work. 
+ 1. {{{/etc/init.d/shorewall start}}}
+
+== Apache ==
+ 1. Edit the file {{{/etc/apache2/sites-enabled/000-default}}} to be:
+{{{
+NameVirtualHost *
+<VirtualHost *>
+        ServerAdmin webmaster@localhost
+        RewriteEngine On
+        RewriteOptions Inherit
+        RewriteRule ^/~([a-z][a-z0-9]+)/(.+)\.(probe|iperf|dump)(|\.gz) /~$1/testbed/cgi-bin/dispatch.sh/~$1/$2\.$3$4 [NS,T=application/x-http-cgi]  
+
+        DocumentRoot /var/www/
+        <Directory />
+                Options FollowSymLinks
+                AllowOverride None
+        </Directory>
+        <Directory /var/www/>
+                Options Indexes FollowSymLinks MultiViews
+                AllowOverride None
+                Order allow,deny
+                allow from all
+                # This directive allows us to have apache2's default start page
+                # in /apache2-default/, but still have / go to the right place
+                RedirectMatch ^/$ /apache2-default/
+        </Directory>
+
+        ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/
+        <Directory "/usr/lib/cgi-bin">
+                AllowOverride None
+                Options ExecCGI -MultiViews +SymLinksIfOwnerMatch
+                Order allow,deny
+                Allow from all
+        </Directory>
+
+        ErrorLog /var/log/apache2/error.log
+
+        # Possible values include: debug, info, notice, warn, error, crit,
+        # alert, emerg.
+        LogLevel warn
+
+        CustomLog /var/log/apache2/access.log combined
+        ServerSignature On
+
+    Alias /doc/ "/usr/share/doc/"
+    <Directory "/usr/share/doc/">
+        Options Indexes MultiViews FollowSymLinks
+        AllowOverride None
+        Order deny,allow
+        Deny from all
+        Allow from 127.0.0.0/255.0.0.0 ::1/128
+    </Directory>
+
+</VirtualHost>
+}}}
+ 1. Create some links for the modules that are needed:
+{{{
+cd /etc/apache2/mods-enabled/
+ln -s ../mods-available/actions.load 
+ln -s ../mods-available/userdir.load 
+ln -s ../mods-available/userdir.conf 
+ln -s ../mods-available/cgi.load
+ln -s ../mods-available/rewrite.load
+}}}
+ 1. Edit the file {{{/etc/apache2/mods-enabled/userdir.conf}}} to be:
+{{{
+<IfModule mod_userdir.c>
+        UserDir /home
+        UserDir disabled root
+
+        <Directory /home/*/testbed/cgi-bin>
+                Options ExecCGI
+                SetHandler cgi-script
+        </Directory>
+
+        <Directory /home/*>
+                AllowOverride FileInfo AuthConfig Limit
+                Options MultiViews Indexes SymLinksIfOwnerMatch IncludesNoExec
+        </Directory>
+</IfModule>
+}}}
+ 1. restart apache
+{{{
+/etc/init.d/apache2 restart
+}}}

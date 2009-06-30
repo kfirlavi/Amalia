@@ -1,0 +1,12 @@
+= Building Testbed From Scratch =
+
+ * [wiki:TestbedFromScratch/TestbedComputerSetup Testbed Computer Setup]
+ * [wiki:TestbedFromScratch/LtspSetup LTSP Setup]
+ * [wiki:TestbedFromScratch/RouterSetup Router Setup]
+ * Setup clients boxes
+  * Setup the Soekris boxes explained in this page [wiki:SoekrisSetup]
+ * [wiki:CreatingClientsKernel Preparing clients kernel]
+ * [wiki:WirelessTestbedCalibration Calibrating the Wireless Testbed]
+
+== Wireless Testbed Setup ==
+[[Image(wireless.testbed.png)]]

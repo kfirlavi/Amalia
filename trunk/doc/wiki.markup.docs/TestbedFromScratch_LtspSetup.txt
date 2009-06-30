@@ -1,0 +1,175 @@
+= LTSP setup =
+== LTSP File system ==
+Create the client root file system
+{{{
+ltsp-build-client --arch i386 --keep-packages --prompt-rootpass --serial-console --mirror http://ftp.ie.debian.org/debian
+}}}
+{{{--serial-console}}} will add the line 
+{{{
+T0:2345:respawn:/sbin/getty -L ttyS0 38400 screen
+}}} 
+ to {{{/etc/inittab}}}, so you will need to set your connection rate to 38400 when running {{{minicom}}}.
+
+== No X ==
+Set the clients to load a shell instead of X server. [[BR]]
+Create and edit the file  {{{/opt/ltsp/i386/etc/lts.conf}}}:
+{{{
+[Default]
+        SCREEN_01          = shell 
+}}}
+
+== No logging to the console ==
+Some of the messages by default goes to the console. We don't want that. [[BR]]
+We change it by editing the file {{{/opt/ltsp/i386/etc/sysctl.conf}}} and uncomment the line:
+{{{
+# Uncomment the following to stop low-level messages on console
+# kernel.printk = 4 4 1 7
+}}}
+
+== UDEV setup ==
+If you use madwifi, then look on Ticket #45 .[[BR]]
+
+edit {{{/etc/udev/persistent-net-generator.rules}}}
+
+change this:
+{{{
+# ignore "secondary" raw interfaces of the madwifi driver
+KERNEL=="ath*", ATTRS{type}=="802", GOTO="persistent_net_generator_end"
+}}}
+to this:
+{{{
+# ignore "secondary" raw interfaces of the madwifi driver
+KERNEL=="ath*", GOTO="persistent_net_generator_end"
+}}}
+
+== SSH on clients ==
+SSH - setup ssh server on every client:
+ 1. This command will chroot to the root fs and will install there the ssh server. 
+{{{
+chroot /opt/ltsp/i386/ aptitude install openssh-server wireless-tools pciutils iperf tcpdump
+}}}
+ 1. Create a ssh connection to the clients using keys:[[BR]]
+ As root run:
+{{{
+ssh-keygen
+mkdir /opt/ltsp/i386/root/.ssh
+cat .ssh/id_rsa.pub >> /opt/ltsp/i386/root/.ssh/authorized_keys
+}}}
+ And for every user you should do:
+{{{
+su - USER
+ssh-keygen 
+exit
+cat /home/USER/.ssh/id_rsa.pub >> /opt/ltsp/i386/root/.ssh/authorized_keys 
+}}}
+
+== Hostname ==
+Allow clients to use the dhcp supplied hostname and not use the default 'ltsp' (see #23). This can be achieved with:
+{{{
+rm /opt/ltsp/i386/etc/hostname
+}}}
+
+== Network ==
+Setup the test network cards:
+ 1. Edit the file {{{/opt/ltsp/i386/etc/init.d/ltsp-client-setup}}} and change the content of the function {{{configure_network()}}} to be:
+{{{
+configure_network() {
+    # get the last ip octate from the already configured eth
+    local ip_last_octate=`/sbin/ifconfig | grep -A 2 eth | grep "inet " | cut -d '.' -f 4 | cut -d ' ' -f 1`
+    local name=`hostname | sed 's/[0-9]//g'` # choped the numbers at the end of the hostname
+    cat /etc/testbed/interfaces.$name | sed "s/IP_LAST_OCTET/$ip_last_octate/" > /etc/network/interfaces
+}
+}}}
+ 1. Create the directory {{{/opt/ltsp/i386/etc/testbed}}} and inside create those interfaces files:
+  1. {{{interfaces.client}}}
+{{{
+auto lo
+iface lo inet loopback
+
+# wireless 
+allow-hotplug ath0
+auto ath0
+iface ath0 inet static
+        post-up echo "nameserver 192.168.1.254" > /etc/resolv.conf
+        post-up route add -net 192.168.3.0 gw 192.168.2.252 netmask 255.255.255.0
+        post-up route add -net 192.168.4.0 gw 192.168.2.252 netmask 255.255.255.0
+
+        # populate arp table with the wireless clients
+        post-up arp -f
+
+        address 192.168.2.IP_LAST_OCTET
+        netmask 255.255.255.0
+        broadcast 192.168.2.255
+        wireless_essid testbed2
+        wireless_ap 00:19:5B:C9:F7:1E
+}}}
+  You will need to change the ap MAC address in the file to be your ap MAC address. 
+  1. {{{interfaces.ap}}}
+{{{
+auto lo
+iface lo inet loopback
+
+allow-hotplug eth1
+auto eth1
+iface eth1 inet static
+        post-up echo "nameserver 192.168.1.254" > /etc/resolv.conf
+        post-up route add -net 192.168.3.0 gw 192.168.4.250 netmask 255.255.255.0
+        # In order for ap to forward packets to the router, we need to switch on this flag
+        post-up echo 1 > /proc/sys/net/ipv4/ip_forward
+
+        # populate arp table with the wireless clients
+        post-up arp -f
+
+        address 192.168.4.IP_LAST_OCTET
+        netmask 255.255.255.0
+        broadcast 192.168.4.255
+
+# wireless 
+allow-hotplug ath0
+auto ath0
+iface ath0 inet static
+        # create the access point
+        pre-up rmmod ath_pci || true
+        pre-up modprobe ath_pci autocreate=ap || true
+
+        # name server setup
+        pre-up echo "nameserver 192.168.1.254" > /etc/resolv.conf
+
+        # turn off all atheros eccelerations
+        post-up iwpriv ath0 abolt 0
+
+        # populate arp table with the wireless clients
+        post-up arp -f
+
+        # remove the ath0 device when bringing the interface down
+        post-down wlanconfig ath0 destroy
+
+        address 192.168.2.IP_LAST_OCTET
+        netmask 255.255.255.0
+        broadcast 192.168.2.255
+        wireless-essid testbed2
+        wireless_txpower 1
+}}}
+  1. {{{interfaces.src}}}
+{{{
+auto lo
+iface lo inet loopback
+
+allow-hotplug eth0
+auto eth0
+iface eth0 inet static
+        post-up echo "nameserver 192.168.1.254" > /etc/resolv.conf
+        post-up route add -net 192.168.2.0 gw 192.168.3.250 netmask 255.255.255.0 dev eth0
+        address 192.168.3.IP_LAST_OCTET
+        netmask 255.255.255.0
+        broadcast 192.168.3.255
+}}}
+
+== ARP setup ==
+When starting an experiment, we don't want to have arp requests that are not answered, because arp is not acknolaged, and thus if all clients so arp request, or in a middle of a congested test, this can cause problem populating the arp cache. If we populate the arp cache in advance, the entries will not expire and thus we'll have a clean experiment. [[BR]]
+
+When the clients are up, you shuld run:
+{{{
+arp.file.gen <number of stations>
+}}}
+This will create the {{{/etc/ethers}}} which will be used when the wireless interface of each node will come up with the command {{{arp -f}}}.

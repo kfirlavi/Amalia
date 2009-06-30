@@ -1,0 +1,12 @@
+= Linux Tips =
+
+== Getting kernel source ==
+=== Getting latest kernel source ===
+{{{
+LATEST_VERSION=`ketchup -s 2.6-rc` && mkdir $LATEST_VERSION && cd $LATEST_VERSION && ketchup -G $LATEST_VERSION
+}}}
+
+== Getting a version of the kernel ==
+{{{
+VERSION=2.6.23 && mkdir $VERSION && cd $VERSION && ketchup -G $VERSION
+}}}

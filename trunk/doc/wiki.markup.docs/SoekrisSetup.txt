@@ -1,0 +1,37 @@
+= Soekris Embedded =
+
+This link have a very good tutorial for the soekris box: http://www.ultradesic.com/index.php?section=22
+== Connecting ==
+
+ 1. Install minicom:
+{{{
+aptitude install minicom
+}}}
+ There is a nice tutorial on minicom [http://www.cyberciti.biz/tips/connect-soekris-single-board-computer-using-minicom.html here].
+ 1. Connect the serial port of your computer to the Soekris
+ 1. run {{{minicom}}}
+  1. CTRL-A O 
+  1. Choose "Serial port setup"
+  1. "Serial Device" should be {{{/dev/ttyS0}}} and "Bps/Par/Bits" should be {{{38400 8N1}}}
+  1. Choose "Save setup as dfl" end exit the menu
+  1. Now you can reset Soekris and you will see the comp load inside the minicom terminal. 
+
+== Setting PXE Boot ==
+We want the clients to boot from the network using PXE.[[BR]]
+So, we will enable it in the Soekris bios. 
+ 1. Reset the Soekris box
+ 1. Press CTRL-p when it shows to. 
+ 1. Type 
+{{{
+set BootDrive=F0
+set PXEBoot=Enabled
+set ConSpeed=38400
+}}}
+ 1. Type {{{show}}} to see the changes.
+ 1. Reset and you will see the MAC and the box boot from PXE. 
+ 1. As you can read in bug #17, you will need to replace the file {{{/var/lib/tftpboot/ltsp/i386/pxelinux.0}}} with this attachment:pxelinux.0 in the tftp server. Read this bug, and the page linked to it. 
+
+== Kernel Configuration ==
+Some helpful links:
+ * http://www.brixandersen.dk/papers/net4801/net4801.html
+ * http://wiki.soekris.info/Kernel_2.6.23.8_from_source_on_Debian_-_ALL_WORKS_PERFECT

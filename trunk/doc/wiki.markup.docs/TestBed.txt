@@ -1,0 +1,76 @@
+= Testbeds =
+ 
+ * [TestbedFromScratch Building Testbed From Scratch]
+
+== Working as a regular user ==
+ 1. Change the ownership of your personal files:
+{{{
+chown -R kfir:kfir /home/kfir
+}}}
+ 1. Create an ssh key
+{{{
+ssh-keygen -b 4048 -t rsa
+}}}
+ 1. Copy your public key to the nfs root of testbed machines (as root):
+{{{
+cat .ssh/id_rsa.pub >>  /opt/ltsp/i386/root/.ssh/authorized_keys
+}}}
+ 1. Need to take care of apache2 configuration:
+  1. Edit the file {{{/etc/apache2/sites-enabled/000-default}}}:
+{{{
+RewriteEngine On
+RewriteOptions Inherit
+RewriteRule ^/~([a-z][a-z0-9]+)/(.+)\.(probe|iperf|dump)(|\.gz) /~$1/testbed/cgi-bin/dispatch.sh/~$1/$2\.$3$4 [NS,T=application/x    -http-cgi]
+}}}
+  This is the engine to enable per user cgi-bin and dynamic mime-type.
+  1. Add the line to {{{/etc/apache2/mods-available/userdir.conf}}}:
+{{{
+<Directory /home/*/testbed/cgi-bin>
+       Options ExecCGI                                                                                                          
+       SetHandler cgi-script
+</Directory>
+}}}
+  This will set the cgi-bin dir as executable by apache. Note that {{{/home/*}}} is the users public_html folder. 
+ 1. Edit sudoers with
+{{{
+visudo
+}}}
+ and add this line for each user
+{{{
+kfir    ALL= /home/kfir/testbed/bin/cpkrn2tftpdir
+}}}
+ This will let user kfir to run {{{cpkrn2tftpdir}}} as root.
+
+== Testbed scripts ==
+=== checkout your version of testbed scripts ===
+ 1. login to scriptng with your user. 
+ 1. Checkout the scripts to bin directory: 
+{{{
+svn checkout http://sauron/svn-repos/testbed/trunk/testbed
+}}}
+ 1. logout and login again so {{{.bashrc}}} will add {{{~/bin}}} directory to your path. 
+ 1. now running scripts will search at your bin dir and then the global one. (just run {{{echo $PATH}}} to see the sequence of the search).
+
+=== Committing a change ===
+{{{
+svn commit -m "brief explenation what is this change" [file1 file2 ...]
+}}}
+leaving the file field empty will commit all the changes in all files. 
+
+=== Checking things out === 
+{{{
+svn info
+}}}
+{{{
+svn status
+}}}
+{{{
+svn diff [file]
+}}}
+
+=== Getting the latest changes of files ===
+To get the latest changes in the repository:
+{{{
+svn update
+}}}
+This should be done daily, to not drift from the main repository. 
